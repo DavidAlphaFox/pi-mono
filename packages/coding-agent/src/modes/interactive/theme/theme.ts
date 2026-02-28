@@ -1,3 +1,16 @@
+/**
+ * 主题系统。
+ *
+ * 该文件实现了完整的终端主题管理系统，包括：
+ * - JSON 主题文件的加载、验证和热重载
+ * - 颜色模式检测（truecolor/256-color）和颜色转换
+ * - Theme 类提供 fg/bg/bold/italic 等样式方法
+ * - 全局 theme 实例通过 Proxy/globalThis 实现跨模块访问
+ * - 为编辑器、Markdown、选择列表等组件生成主题配置
+ * - 代码语法高亮（通过 cli-highlight）
+ * - HTML 导出时的颜色转换辅助函数
+ */
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@mariozechner/pi-tui";
@@ -8,7 +21,7 @@ import { highlight, supportsLanguage } from "cli-highlight";
 import { getCustomThemesDir, getThemesDir } from "../../../config.js";
 
 // ============================================================================
-// Types & Schema
+// 类型和 Schema 定义
 // ============================================================================
 
 const ColorValueSchema = Type.Union([
@@ -95,6 +108,7 @@ type ThemeJson = Static<typeof ThemeJsonSchema>;
 
 const validateThemeJson = TypeCompiler.Compile(ThemeJsonSchema);
 
+/** 前景色主题键名类型，用于 theme.fg() 方法 */
 export type ThemeColor =
 	| "accent"
 	| "border"
@@ -142,6 +156,7 @@ export type ThemeColor =
 	| "thinkingXhigh"
 	| "bashMode";
 
+/** 背景色主题键名类型，用于 theme.bg() 方法 */
 export type ThemeBg =
 	| "selectedBg"
 	| "userMessageBg"
@@ -330,9 +345,14 @@ function resolveThemeColors<T extends Record<string, ColorValue>>(
 }
 
 // ============================================================================
-// Theme Class
+// 主题类
 // ============================================================================
 
+/**
+ * 主题类。
+ * 管理前景色和背景色映射，提供 fg/bg/bold/italic/inverse 等样式方法。
+ * 根据终端颜色模式（truecolor/256-color）自动转换颜色值。
+ */
 export class Theme {
 	readonly name?: string;
 	readonly sourcePath?: string;
@@ -451,6 +471,7 @@ function getBuiltinThemes(): Record<string, ThemeJson> {
 	return BUILTIN_THEMES;
 }
 
+/** 获取所有可用主题的名称列表 */
 export function getAvailableThemes(): string[] {
 	const themes = new Set<string>(Object.keys(getBuiltinThemes()));
 	const customThemesDir = getCustomThemesDir();
@@ -468,11 +489,15 @@ export function getAvailableThemes(): string[] {
 	return Array.from(themes).sort();
 }
 
+/** 主题信息接口 */
 export interface ThemeInfo {
+	/** 主题名称 */
 	name: string;
+	/** 主题文件路径（内置主题为 undefined） */
 	path: string | undefined;
 }
 
+/** 获取所有可用主题及其文件路径 */
 export function getAvailableThemesWithPaths(): ThemeInfo[] {
 	const themesDir = getThemesDir();
 	const customThemesDir = getCustomThemesDir();
@@ -595,6 +620,7 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 	});
 }
 
+/** 从文件路径加载主题 */
 export function loadThemeFromPath(themePath: string, mode?: ColorMode): Theme {
 	const content = fs.readFileSync(themePath, "utf-8");
 	const themeJson = parseThemeJsonContent(themePath, content);
@@ -610,6 +636,7 @@ function loadTheme(name: string, mode?: ColorMode): Theme {
 	return createTheme(themeJson, mode);
 }
 
+/** 按名称获取主题实例（加载失败返回 undefined） */
 export function getThemeByName(name: string): Theme | undefined {
 	try {
 		return loadTheme(name);
@@ -641,11 +668,12 @@ function getDefaultTheme(): string {
 // Global Theme Instance
 // ============================================================================
 
-// Use globalThis to share theme across module loaders (tsx + jiti in dev mode)
+// 使用 globalThis 在模块加载器之间共享主题（tsx + jiti 开发模式）
 const THEME_KEY = Symbol.for("@mariozechner/pi-coding-agent:theme");
 
-// Export theme as a getter that reads from globalThis
-// This ensures all module instances (tsx, jiti) see the same theme
+// 导出 theme 作为从 globalThis 读取的 getter
+// 确保所有模块实例（tsx、jiti）看到相同的主题
+/** 全局主题实例。通过 Proxy 实现跨模块共享。 */
 export const theme: Theme = new Proxy({} as Theme, {
 	get(_target, prop) {
 		const t = (globalThis as Record<symbol, Theme>)[THEME_KEY];
@@ -663,6 +691,7 @@ let themeWatcher: fs.FSWatcher | undefined;
 let onThemeChangeCallback: (() => void) | undefined;
 const registeredThemes = new Map<string, Theme>();
 
+/** 设置从资源加载器注册的主题列表 */
 export function setRegisteredThemes(themes: Theme[]): void {
 	registeredThemes.clear();
 	for (const theme of themes) {
@@ -672,6 +701,7 @@ export function setRegisteredThemes(themes: Theme[]): void {
 	}
 }
 
+/** 初始化主题系统，加载指定主题并可选启用文件监听热重载 */
 export function initTheme(themeName?: string, enableWatcher: boolean = false): void {
 	const name = themeName ?? getDefaultTheme();
 	currentThemeName = name;
@@ -688,6 +718,7 @@ export function initTheme(themeName?: string, enableWatcher: boolean = false): v
 	}
 }
 
+/** 切换到指定名称的主题 */
 export function setTheme(name: string, enableWatcher: boolean = false): { success: boolean; error?: string } {
 	currentThemeName = name;
 	try {
@@ -711,6 +742,7 @@ export function setTheme(name: string, enableWatcher: boolean = false): { succes
 	}
 }
 
+/** 直接设置主题实例（内存中的主题，无法文件监听） */
 export function setThemeInstance(themeInstance: Theme): void {
 	setGlobalTheme(themeInstance);
 	currentThemeName = "<in-memory>";
@@ -720,6 +752,7 @@ export function setThemeInstance(themeInstance: Theme): void {
 	}
 }
 
+/** 注册主题变更回调函数 */
 export function onThemeChange(callback: () => void): void {
 	onThemeChangeCallback = callback;
 }
@@ -782,6 +815,7 @@ function startThemeWatcher(): void {
 	}
 }
 
+/** 停止主题文件监听器 */
 export function stopThemeWatcher(): void {
 	if (themeWatcher) {
 		themeWatcher.close();
@@ -840,8 +874,8 @@ function ansi256ToHex(index: number): string {
 }
 
 /**
- * Get resolved theme colors as CSS-compatible hex strings.
- * Used by HTML export to generate CSS custom properties.
+ * 获取解析后的主题颜色，以 CSS 兼容的十六进制字符串形式返回。
+ * 用于 HTML 导出时生成 CSS 自定义属性。
  */
 export function getResolvedThemeColors(themeName?: string): Record<string, string> {
 	const name = themeName ?? currentThemeName ?? getDefaultTheme();
@@ -867,7 +901,7 @@ export function getResolvedThemeColors(themeName?: string): Record<string, strin
 }
 
 /**
- * Check if a theme is a "light" theme (for CSS that needs light/dark variants).
+ * 检查主题是否为浅色主题（用于需要明暗变体的 CSS）。
  */
 export function isLightTheme(themeName?: string): boolean {
 	// Currently just check the name - could be extended to analyze colors
@@ -875,8 +909,8 @@ export function isLightTheme(themeName?: string): boolean {
 }
 
 /**
- * Get explicit export colors from theme JSON, if specified.
- * Returns undefined for each color that isn't explicitly set.
+ * 从主题 JSON 中获取显式的导出颜色。
+ * 未显式设置的颜色返回 undefined。
  */
 export function getThemeExportColors(themeName?: string): {
 	pageBg?: string;
@@ -950,8 +984,8 @@ function getCliHighlightTheme(t: Theme): CliHighlightTheme {
 }
 
 /**
- * Highlight code with syntax coloring based on file extension or language.
- * Returns array of highlighted lines.
+ * 基于文件扩展名或语言名称进行代码语法高亮。
+ * 返回高亮后的行数组。
  */
 export function highlightCode(code: string, lang?: string): string[] {
 	// Validate language before highlighting to avoid stderr spam from cli-highlight
@@ -969,7 +1003,7 @@ export function highlightCode(code: string, lang?: string): string[] {
 }
 
 /**
- * Get language identifier from file path extension.
+ * 从文件路径扩展名获取语言标识符。
  */
 export function getLanguageFromPath(filePath: string): string | undefined {
 	const ext = filePath.split(".").pop()?.toLowerCase();
@@ -1039,6 +1073,7 @@ export function getLanguageFromPath(filePath: string): string | undefined {
 	return extToLang[ext];
 }
 
+/** 获取 Markdown 渲染主题配置 */
 export function getMarkdownTheme(): MarkdownTheme {
 	return {
 		heading: (text: string) => theme.fg("mdHeading", text),
@@ -1072,6 +1107,7 @@ export function getMarkdownTheme(): MarkdownTheme {
 	};
 }
 
+/** 获取选择列表主题配置 */
 export function getSelectListTheme(): SelectListTheme {
 	return {
 		selectedPrefix: (text: string) => theme.fg("accent", text),
@@ -1082,6 +1118,7 @@ export function getSelectListTheme(): SelectListTheme {
 	};
 }
 
+/** 获取编辑器主题配置 */
 export function getEditorTheme(): EditorTheme {
 	return {
 		borderColor: (text: string) => theme.fg("borderMuted", text),
@@ -1089,6 +1126,7 @@ export function getEditorTheme(): EditorTheme {
 	};
 }
 
+/** 获取设置列表主题配置 */
 export function getSettingsListTheme(): import("@mariozechner/pi-tui").SettingsListTheme {
 	return {
 		label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : text),

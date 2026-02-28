@@ -1,9 +1,12 @@
 /**
- * Gemini CLI OAuth flow (Google Cloud Code Assist)
- * Standard Gemini models only (gemini-2.0-flash, gemini-2.5-*)
+ * @file Gemini CLI OAuth 认证流程（Google Cloud Code Assist）
  *
- * NOTE: This module uses Node.js http.createServer for the OAuth callback.
- * It is only intended for CLI use, not browser environments.
+ * 实现 Google Cloud Code Assist 的 OAuth 流程，仅支持标准 Gemini 模型
+ * （gemini-2.0-flash、gemini-2.5-* 等）。
+ * 通过本地 HTTP 服务器（端口 8085）接收 OAuth 回调。
+ * 支持自动发现或创建 Cloud Code Assist 项目。
+ *
+ * 注意：此模块使用 Node.js http.createServer，仅适用于 CLI 环境。
  */
 
 import type { Server } from "node:http";
@@ -575,6 +578,7 @@ export async function loginGeminiCli(
 	}
 }
 
+/** Gemini CLI OAuth 提供商实现（适配 OAuthProviderInterface 接口） */
 export const geminiCliOAuthProvider: OAuthProviderInterface = {
 	id: "google-gemini-cli",
 	name: "Google Cloud Code Assist (Gemini CLI)",

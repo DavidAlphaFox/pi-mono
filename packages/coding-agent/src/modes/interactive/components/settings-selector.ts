@@ -1,3 +1,12 @@
+/**
+ * 设置面板组件。
+ *
+ * 该文件提供交互式设置面板，包含多种设置类型：
+ * - 布尔开关（如自动压缩、自动重试）
+ * - 子菜单选择（如主题、思考级别）
+ * - 传输层配置等
+ */
+
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Transport } from "@mariozechner/pi-ai";
 import {
@@ -13,6 +22,7 @@ import {
 import { getSelectListTheme, getSettingsListTheme, theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
+/** 各思考级别的描述映射 */
 const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 	off: "No reasoning",
 	minimal: "Very brief reasoning (~1k tokens)",
@@ -22,6 +32,7 @@ const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 	xhigh: "Maximum reasoning (~32k tokens)",
 };
 
+/** 设置面板的配置数据接口 */
 export interface SettingsConfig {
 	autoCompact: boolean;
 	showImages: boolean;
@@ -45,6 +56,7 @@ export interface SettingsConfig {
 	clearOnShrink: boolean;
 }
 
+/** 设置变更回调接口 */
 export interface SettingsCallbacks {
 	onAutoCompactChange: (enabled: boolean) => void;
 	onShowImagesChange: (enabled: boolean) => void;
@@ -131,7 +143,8 @@ class SelectSubmenu extends Container {
 }
 
 /**
- * Main settings selector component.
+ * 主设置选择器组件。
+ * 提供布尔开关、子菜单等多种设置类型的交互管理。
  */
 export class SettingsSelectorComponent extends Container {
 	private settingsList: SettingsList;

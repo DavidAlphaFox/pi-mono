@@ -1,3 +1,14 @@
+/**
+ * @file 工具调用参数验证
+ *
+ * 本文件使用 AJV（Another JSON Validator）对 LLM 返回的工具调用参数
+ * 进行 JSON Schema 验证。支持类型强制转换（coerceTypes），
+ * 能将字符串自动转为数字等预期类型。
+ *
+ * 在浏览器扩展环境中（Manifest V3 CSP 限制），AJV 无法工作，
+ * 此时跳过验证直接信任 LLM 输出。
+ */
+
 import AjvModule from "ajv";
 import addFormatsModule from "ajv-formats";
 

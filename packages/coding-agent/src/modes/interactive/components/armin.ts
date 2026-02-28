@@ -1,5 +1,8 @@
 /**
- * Armin says hi! A fun easter egg with animated XBM art.
+ * Armin 彩蛋动画组件。
+ *
+ * 该文件是一个趣味彩蛋，展示 "Armin" 的 XBM 像素艺术，
+ * 并提供多种动画效果（打字机、扫描线、雨滴、淡入、CRT、故障、溶解等）。
  */
 
 import type { Component, TUI } from "@mariozechner/pi-tui";

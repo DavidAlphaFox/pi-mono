@@ -1,9 +1,16 @@
+/**
+ * 图片显示选择器组件。
+ *
+ * 该文件提供一个简单的是/否选择器，用于切换终端内图片的显示方式。
+ */
+
 import { Container, type SelectItem, SelectList } from "@mariozechner/pi-tui";
 import { getSelectListTheme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
 /**
- * Component that renders a show images selector with borders
+ * 图片显示选择器组件。
+ * 允许用户选择在终端中内联显示图片还是显示文本占位符。
  */
 export class ShowImagesSelectorComponent extends Container {
 	private selectList: SelectList;

@@ -1,10 +1,14 @@
 /**
- * Generates sendRuntimeMessage() function for injection into execution contexts.
- * Provides unified messaging API that works in both sandbox iframe and user script contexts.
+ * @file RuntimeMessageBridge.ts
+ * @description 运行时消息桥代码生成器。
+ * 为沙箱 iframe 和用户脚本上下文生成 sendRuntimeMessage() 函数的可注入代码，
+ * 提供统一的消息 API，支持请求-响应和触发-遗忘两种模式。
  */
 
+/** 消息类型：请求-响应 或 触发-遗忘 */
 export type MessageType = "request-response" | "fire-and-forget";
 
+/** 消息桥配置选项 */
 export interface RuntimeMessageBridgeOptions {
 	context: "sandbox-iframe" | "user-script";
 	sandboxId: string;

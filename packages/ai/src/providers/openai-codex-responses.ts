@@ -1,3 +1,16 @@
+/**
+ * @file OpenAI Codex Responses API 提供商（ChatGPT Plus/Pro 订阅）
+ *
+ * 本文件实现了通过 ChatGPT 后端 API（chatgpt.com/backend-api/codex/responses）
+ * 调用 GPT-5 系列模型的流式处理，支持：
+ * - SSE（Server-Sent Events）和 WebSocket 双传输层，自动降级
+ * - WebSocket 连接池复用（按 sessionId 缓存，5 分钟空闲超时）
+ * - JWT 令牌解析提取 chatgpt_account_id
+ * - 指数退避重试（最多 3 次，处理速率限制和瞬态错误）
+ * - 友好的用量限制错误提示（含重置时间）
+ * - 推理级别钳制（不同模型版本支持不同的 effort 取值范围）
+ */
+
 // NEVER convert to top-level import - breaks browser/Vite builds (web-ui)
 let _os: typeof import("node:os") | null = null;
 if (typeof process !== "undefined" && (process.versions?.node || process.versions?.bun)) {
@@ -45,6 +58,7 @@ const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
 // Types
 // ============================================================================
 
+/** OpenAI Codex Responses API 的流式调用选项 */
 export interface OpenAICodexResponsesOptions extends StreamOptions {
 	reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null;
@@ -99,6 +113,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 // Main Stream Function
 // ============================================================================
 
+/** OpenAI Codex Responses API 的底层流式调用函数，支持 SSE 和 WebSocket 双传输层 */
 export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions> = (
 	model: Model<"openai-codex-responses">,
 	context: Context,
@@ -251,6 +266,7 @@ export const streamOpenAICodexResponses: StreamFunction<"openai-codex-responses"
 	return stream;
 };
 
+/** OpenAI Codex Responses API 的简化版流式调用函数 */
 export const streamSimpleOpenAICodexResponses: StreamFunction<"openai-codex-responses", SimpleStreamOptions> = (
 	model: Model<"openai-codex-responses">,
 	context: Context,

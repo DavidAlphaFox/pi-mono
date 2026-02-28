@@ -1,19 +1,33 @@
+/**
+ * 设置管理模块
+ *
+ * 职责：
+ * - 管理全局（~/.pi/agent/settings.json）和项目级（.pi/settings.json）设置
+ * - 支持深度合并（项目设置覆盖全局设置）
+ * - 提供带文件锁的并发安全读写
+ * - 处理设置格式迁移（queueMode→steeringMode、websockets→transport 等）
+ * - 跟踪会话期间修改的字段，仅持久化变更部分
+ */
+
 import type { Transport } from "@mariozechner/pi-ai";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.js";
 
+/** 上下文压缩设置 */
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
 	reserveTokens?: number; // default: 16384
 	keepRecentTokens?: number; // default: 20000
 }
 
+/** 分支摘要设置 */
 export interface BranchSummarySettings {
 	reserveTokens?: number; // default: 16384 (tokens reserved for prompt + LLM response)
 }
 
+/** API 请求重试设置 */
 export interface RetrySettings {
 	enabled?: boolean; // default: true
 	maxRetries?: number; // default: 3
@@ -21,16 +35,19 @@ export interface RetrySettings {
 	maxDelayMs?: number; // default: 60000 (max server-requested delay before failing)
 }
 
+/** 终端显示设置 */
 export interface TerminalSettings {
 	showImages?: boolean; // default: true (only relevant if terminal supports images)
 	clearOnShrink?: boolean; // default: false (clear empty rows when content shrinks)
 }
 
+/** 图片处理设置 */
 export interface ImageSettings {
 	autoResize?: boolean; // default: true (resize images to 2000x2000 max for better model compatibility)
 	blockImages?: boolean; // default: false - when true, prevents all images from being sent to LLM providers
 }
 
+/** 各思考级别的自定义 token 预算 */
 export interface ThinkingBudgetsSettings {
 	minimal?: number;
 	low?: number;
@@ -38,6 +55,7 @@ export interface ThinkingBudgetsSettings {
 	high?: number;
 }
 
+/** Markdown 渲染设置 */
 export interface MarkdownSettings {
 	codeBlockIndent?: string; // default: "  "
 }
@@ -59,6 +77,7 @@ export type PackageSource =
 			themes?: string[];
 	  };
 
+/** 完整设置结构 - 全局和项目设置的联合类型 */
 export interface Settings {
 	lastChangelogVersion?: string;
 	defaultProvider?: string;
@@ -93,7 +112,7 @@ export interface Settings {
 	markdown?: MarkdownSettings;
 }
 
-/** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
+/** 深度合并设置：项目/覆盖设置优先，嵌套对象递归合并 */
 function deepMergeSettings(base: Settings, overrides: Settings): Settings {
 	const result: Settings = { ...base };
 
@@ -124,17 +143,21 @@ function deepMergeSettings(base: Settings, overrides: Settings): Settings {
 	return result;
 }
 
+/** 设置作用域 - 全局或项目级 */
 export type SettingsScope = "global" | "project";
 
+/** 设置存储后端接口 */
 export interface SettingsStorage {
 	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void;
 }
 
+/** 设置加载/保存错误 */
 export interface SettingsError {
 	scope: SettingsScope;
 	error: Error;
 }
 
+/** 基于文件的设置存储实现 - 使用文件锁保证并发安全 */
 export class FileSettingsStorage implements SettingsStorage {
 	private globalSettingsPath: string;
 	private projectSettingsPath: string;
@@ -175,6 +198,7 @@ export class FileSettingsStorage implements SettingsStorage {
 	}
 }
 
+/** 内存设置存储实现 - 用于测试，无文件 I/O */
 export class InMemorySettingsStorage implements SettingsStorage {
 	private global: string | undefined;
 	private project: string | undefined;
@@ -192,6 +216,12 @@ export class InMemorySettingsStorage implements SettingsStorage {
 	}
 }
 
+/**
+ * 设置管理器 - 管理全局和项目级设置的读写
+ *
+ * 设置优先级：项目设置 > 全局设置 > 默认值
+ * 修改跟踪：仅持久化会话期间实际修改的字段，避免覆盖其他实例的变更
+ */
 export class SettingsManager {
 	private storage: SettingsStorage;
 	private globalSettings: Settings;
@@ -223,13 +253,13 @@ export class SettingsManager {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 	}
 
-	/** Create a SettingsManager that loads from files */
+	/** 创建从文件加载的 SettingsManager */
 	static create(cwd: string = process.cwd(), agentDir: string = getAgentDir()): SettingsManager {
 		const storage = new FileSettingsStorage(cwd, agentDir);
 		return SettingsManager.fromStorage(storage);
 	}
 
-	/** Create a SettingsManager from an arbitrary storage backend */
+	/** 从任意存储后端创建 SettingsManager */
 	static fromStorage(storage: SettingsStorage): SettingsManager {
 		const globalLoad = SettingsManager.tryLoadFromStorage(storage, "global");
 		const projectLoad = SettingsManager.tryLoadFromStorage(storage, "project");
@@ -251,7 +281,7 @@ export class SettingsManager {
 		);
 	}
 
-	/** Create an in-memory SettingsManager (no file I/O) */
+	/** 创建内存 SettingsManager（无文件 I/O，用于测试） */
 	static inMemory(settings: Partial<Settings> = {}): SettingsManager {
 		const storage = new InMemorySettingsStorage();
 		return new SettingsManager(storage, settings, {});
@@ -282,7 +312,7 @@ export class SettingsManager {
 		}
 	}
 
-	/** Migrate old settings format to new format */
+	/** 迁移旧设置格式到新格式（queueMode→steeringMode、websockets→transport、skills 对象→数组） */
 	private static migrateSettings(settings: Record<string, unknown>): Settings {
 		// Migrate queueMode -> steeringMode
 		if ("queueMode" in settings && !("steeringMode" in settings)) {
@@ -355,7 +385,7 @@ export class SettingsManager {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 	}
 
-	/** Apply additional overrides on top of current settings */
+	/** 在当前设置之上应用额外覆盖（如 CLI 参数） */
 	applyOverrides(overrides: Partial<Settings>): void {
 		this.settings = deepMergeSettings(this.settings, overrides);
 	}

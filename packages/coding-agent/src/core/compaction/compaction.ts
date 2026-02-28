@@ -1,8 +1,15 @@
 /**
- * Context compaction for long sessions.
+ * 长会话的上下文压缩
  *
- * Pure functions for compaction logic. The session manager handles I/O,
- * and after compaction the session is reloaded.
+ * 本文件实现了上下文压缩的核心逻辑，采用纯函数设计。
+ * 会话管理器负责 I/O 操作，压缩完成后会话会被重新加载。
+ *
+ * 主要功能：
+ * 1. 令牌估算：基于字符数/4 的启发式方法估算消息的令牌数
+ * 2. 切割点检测：在保留最近 N 个令牌的前提下，找到合适的切割位置
+ * 3. 摘要生成：使用 LLM 对被丢弃的消息生成结构化摘要
+ * 4. 文件操作跟踪：记录哪些文件被读取和修改
+ * 5. 分段摘要：当切割点在对话轮次中间时，生成轮次前缀摘要
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
@@ -29,14 +36,14 @@ import {
 // File Operation Tracking
 // ============================================================================
 
-/** Details stored in CompactionEntry.details for file tracking */
+/** 存储在 CompactionEntry.details 中的文件跟踪信息 */
 export interface CompactionDetails {
 	readFiles: string[];
 	modifiedFiles: string[];
 }
 
 /**
- * Extract file operations from messages and previous compaction entries.
+ * 从消息和之前的压缩条目中提取文件操作记录。
  */
 function extractFileOperations(
 	messages: AgentMessage[],
@@ -73,8 +80,8 @@ function extractFileOperations(
 // ============================================================================
 
 /**
- * Extract AgentMessage from an entry if it produces one.
- * Returns undefined for entries that don't contribute to LLM context.
+ * 从会话条目中提取 AgentMessage（如果该条目产生消息）。
+ * 对不贡献 LLM 上下文的条目返回 undefined。
  */
 function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 	if (entry.type === "message") {
@@ -92,7 +99,7 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 	return undefined;
 }
 
-/** Result from compact() - SessionManager adds uuid/parentUuid when saving */
+/** compact() 的返回结果 - SessionManager 在保存时添加 uuid/parentUuid */
 export interface CompactionResult<T = unknown> {
 	summary: string;
 	firstKeptEntryId: string;
@@ -105,12 +112,17 @@ export interface CompactionResult<T = unknown> {
 // Types
 // ============================================================================
 
+/** 压缩设置 */
 export interface CompactionSettings {
+	/** 是否启用自动压缩 */
 	enabled: boolean;
+	/** 为摘要和系统提示预留的令牌数 */
 	reserveTokens: number;
+	/** 压缩后保留的最近对话令牌数 */
 	keepRecentTokens: number;
 }
 
+/** 默认压缩设置 */
 export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
 	enabled: true,
 	reserveTokens: 16384,
@@ -122,16 +134,16 @@ export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
 // ============================================================================
 
 /**
- * Calculate total context tokens from usage.
- * Uses the native totalTokens field when available, falls back to computing from components.
+ * 从使用量数据计算总上下文令牌数。
+ * 优先使用原生 totalTokens 字段，不可用时从各分量计算。
  */
 export function calculateContextTokens(usage: Usage): number {
 	return usage.totalTokens || usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 }
 
 /**
- * Get usage from an assistant message if available.
- * Skips aborted and error messages as they don't have valid usage data.
+ * 从助手消息中获取使用量数据（如果有）。
+ * 跳过被中止和错误的消息，因为它们没有有效的使用量数据。
  */
 function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 	if (msg.role === "assistant" && "usage" in msg) {
@@ -144,7 +156,7 @@ function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 }
 
 /**
- * Find the last non-aborted assistant message usage from session entries.
+ * 从会话条目中找到最后一条未被中止的助手消息的使用量数据。
  */
 export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
 	for (let i = entries.length - 1; i >= 0; i--) {
@@ -157,10 +169,15 @@ export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefine
 	return undefined;
 }
 
+/** 上下文使用量的估算结果 */
 export interface ContextUsageEstimate {
+	/** 估算的总令牌数 */
 	tokens: number;
+	/** 来自最后一次使用量报告的令牌数 */
 	usageTokens: number;
+	/** 最后一次使用量报告之后的估算令牌数 */
 	trailingTokens: number;
+	/** 最后一条带使用量数据的消息索引，无则为 null */
 	lastUsageIndex: number | null;
 }
 
@@ -173,8 +190,8 @@ function getLastAssistantUsageInfo(messages: AgentMessage[]): { usage: Usage; in
 }
 
 /**
- * Estimate context tokens from messages, using the last assistant usage when available.
- * If there are messages after the last usage, estimate their tokens with estimateTokens.
+ * 估算消息的上下文令牌数。
+ * 使用最后一条助手消息的使用量数据，加上后续消息的估算令牌数。
  */
 export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
 	const usageInfo = getLastAssistantUsageInfo(messages);
@@ -207,7 +224,8 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 }
 
 /**
- * Check if compaction should trigger based on context usage.
+ * 根据上下文使用量判断是否应触发压缩。
+ * 当上下文令牌数超过（上下文窗口 - 预留令牌数）时触发。
  */
 export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
 	if (!settings.enabled) return false;
@@ -219,8 +237,8 @@ export function shouldCompact(contextTokens: number, contextWindow: number, sett
 // ============================================================================
 
 /**
- * Estimate token count for a message using chars/4 heuristic.
- * This is conservative (overestimates tokens).
+ * 使用字符数/4 的启发式方法估算消息的令牌数。
+ * 这是保守估算（倾向于高估令牌数）。
  */
 export function estimateTokens(message: AgentMessage): number {
 	let chars = 0;
@@ -283,11 +301,10 @@ export function estimateTokens(message: AgentMessage): number {
 }
 
 /**
- * Find valid cut points: indices of user, assistant, custom, or bashExecution messages.
- * Never cut at tool results (they must follow their tool call).
- * When we cut at an assistant message with tool calls, its tool results follow it
- * and will be kept.
- * BashExecutionMessage is treated like a user message (user-initiated context).
+ * 查找有效的切割点：user、assistant、custom 或 bashExecution 消息的索引。
+ * 永远不在 toolResult 处切割（它们必须跟随其 toolCall）。
+ * 当在带 toolCall 的 assistant 消息处切割时，其后的 toolResult 会被保留。
+ * BashExecutionMessage 被视为用户消息（用户发起的上下文）。
  */
 function findValidCutPoints(entries: SessionEntry[], startIndex: number, endIndex: number): number[] {
 	const cutPoints: number[] = [];
@@ -327,9 +344,9 @@ function findValidCutPoints(entries: SessionEntry[], startIndex: number, endInde
 }
 
 /**
- * Find the user message (or bashExecution) that starts the turn containing the given entry index.
- * Returns -1 if no turn start found before the index.
- * BashExecutionMessage is treated like a user message for turn boundaries.
+ * 查找包含指定条目索引的对话轮次的起始用户消息（或 bashExecution）。
+ * 如果在索引之前未找到轮次起始，则返回 -1。
+ * BashExecutionMessage 在轮次边界判断中被视为用户消息。
  */
 export function findTurnStartIndex(entries: SessionEntry[], entryIndex: number, startIndex: number): number {
 	for (let i = entryIndex; i >= startIndex; i--) {
@@ -348,30 +365,31 @@ export function findTurnStartIndex(entries: SessionEntry[], entryIndex: number, 
 	return -1;
 }
 
+/** 切割点计算结果 */
 export interface CutPointResult {
-	/** Index of first entry to keep */
+	/** 要保留的第一个条目的索引 */
 	firstKeptEntryIndex: number;
-	/** Index of user message that starts the turn being split, or -1 if not splitting */
+	/** 被切分轮次的起始用户消息索引，不切分时为 -1 */
 	turnStartIndex: number;
-	/** Whether this cut splits a turn (cut point is not a user message) */
+	/** 是否切分了一个轮次（切割点不在用户消息处） */
 	isSplitTurn: boolean;
 }
 
 /**
- * Find the cut point in session entries that keeps approximately `keepRecentTokens`.
+ * 在会话条目中找到切割点，使保留的内容大约为 `keepRecentTokens` 个令牌。
  *
- * Algorithm: Walk backwards from newest, accumulating estimated message sizes.
- * Stop when we've accumulated >= keepRecentTokens. Cut at that point.
+ * 算法：从最新条目向前遍历，累积估算的消息大小。
+ * 累积到 >= keepRecentTokens 时停止，在该位置切割。
  *
- * Can cut at user OR assistant messages (never tool results). When cutting at an
- * assistant message with tool calls, its tool results come after and will be kept.
+ * 可以在 user 或 assistant 消息处切割（但永远不在 toolResult 处）。
+ * 在带 toolCall 的 assistant 消息处切割时，其后的 toolResult 会被保留。
  *
- * Returns CutPointResult with:
- * - firstKeptEntryIndex: the entry index to start keeping from
- * - turnStartIndex: if cutting mid-turn, the user message that started that turn
- * - isSplitTurn: whether we're cutting in the middle of a turn
+ * 返回 CutPointResult：
+ * - firstKeptEntryIndex：从该条目索引开始保留
+ * - turnStartIndex：如果在轮次中间切割，该轮次的起始用户消息
+ * - isSplitTurn：是否在轮次中间切割
  *
- * Only considers entries between `startIndex` and `endIndex` (exclusive).
+ * 仅考虑 `startIndex` 和 `endIndex`（不含）之间的条目。
  */
 export function findCutPoint(
 	entries: SessionEntry[],
@@ -514,8 +532,8 @@ Use this EXACT format:
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
 /**
- * Generate a summary of the conversation using the LLM.
- * If previousSummary is provided, uses the update prompt to merge.
+ * 使用 LLM 生成对话摘要。
+ * 如果提供了 previousSummary，使用增量更新提示词进行合并。
  */
 export async function generateSummary(
 	currentMessages: AgentMessage[],
@@ -576,24 +594,30 @@ export async function generateSummary(
 // Compaction Preparation (for extensions)
 // ============================================================================
 
+/** 压缩准备数据，包含切割和摘要所需的所有信息 */
 export interface CompactionPreparation {
-	/** UUID of first entry to keep */
+	/** 要保留的第一个条目的 UUID */
 	firstKeptEntryId: string;
-	/** Messages that will be summarized and discarded */
+	/** 将被摘要并丢弃的消息 */
 	messagesToSummarize: AgentMessage[];
-	/** Messages that will be turned into turn prefix summary (if splitting) */
+	/** 将被转换为轮次前缀摘要的消息（如果在轮次中间切分） */
 	turnPrefixMessages: AgentMessage[];
-	/** Whether this is a split turn (cut point in middle of turn) */
+	/** 是否在轮次中间切分 */
 	isSplitTurn: boolean;
+	/** 压缩前的令牌数 */
 	tokensBefore: number;
-	/** Summary from previous compaction, for iterative update */
+	/** 前一次压缩的摘要，用于迭代更新 */
 	previousSummary?: string;
-	/** File operations extracted from messagesToSummarize */
+	/** 从 messagesToSummarize 中提取的文件操作 */
 	fileOps: FileOperations;
-	/** Compaction settions from settings.jsonl	*/
+	/** 来自 settings.jsonl 的压缩设置 */
 	settings: CompactionSettings;
 }
 
+/**
+ * 准备压缩所需的数据：确定切割点、提取消息和文件操作。
+ * 如果最后一个条目已经是压缩条目则返回 undefined（无需重复压缩）。
+ */
 export function prepareCompaction(
 	pathEntries: SessionEntry[],
 	settings: CompactionSettings,
@@ -696,11 +720,11 @@ Summarize the prefix to provide context for the retained suffix:
 Be concise. Focus on what's needed to understand the kept suffix.`;
 
 /**
- * Generate summaries for compaction using prepared data.
- * Returns CompactionResult - SessionManager adds uuid/parentUuid when saving.
+ * 使用准备好的数据生成压缩摘要。
+ * 返回 CompactionResult - SessionManager 在保存时添加 uuid/parentUuid。
  *
- * @param preparation - Pre-calculated preparation from prepareCompaction()
- * @param customInstructions - Optional custom focus for the summary
+ * @param preparation - 由 prepareCompaction() 预计算的准备数据
+ * @param customInstructions - 可选的自定义摘要重点
  */
 export async function compact(
 	preparation: CompactionPreparation,
@@ -771,7 +795,7 @@ export async function compact(
 }
 
 /**
- * Generate a summary for a turn prefix (when splitting a turn).
+ * 为轮次前缀生成摘要（当在轮次中间切分时使用）。
  */
 async function generateTurnPrefixSummary(
 	messages: AgentMessage[],

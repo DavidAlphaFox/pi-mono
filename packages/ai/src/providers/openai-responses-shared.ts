@@ -1,3 +1,13 @@
+/**
+ * @file OpenAI Responses API 共享工具
+ *
+ * 本文件提供 OpenAI Responses API 和 Azure OpenAI Responses API 共用的工具函数：
+ * - convertResponsesMessages()：将内部消息格式转换为 Responses API 的输入格式
+ * - convertResponsesTools()：将工具定义转换为 Responses API 的工具格式
+ * - processResponsesStream()：统一处理 Responses API 的 SSE 事件流
+ * - shortHash()：生成短哈希用于消息 ID 截断
+ */
+
 import type OpenAI from "openai";
 import type {
 	Tool as OpenAITool,

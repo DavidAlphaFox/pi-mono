@@ -1,13 +1,28 @@
-// Core TUI interfaces and classes
+/**
+ * @file TUI 框架入口文件
+ *
+ * 本文件是终端 UI 框架包的公共 API 入口点。
+ * 从各个模块中重新导出所有公共接口、类型和类，
+ * 提供统一的导入路径给外部使用者。
+ *
+ * 主要导出内容：
+ * - 核心 TUI 类和组件接口（TUI、Container、Component）
+ * - UI 组件（Editor、Input、Markdown、SelectList 等）
+ * - 键盘输入处理（Key、matchesKey、parseKey）
+ * - 终端图像支持（Kitty/iTerm2 协议）
+ * - 自动补全系统
+ * - 模糊匹配工具
+ * - 文本处理工具函数
+ */
 
-// Autocomplete support
+// 自动补全支持
 export {
 	type AutocompleteItem,
 	type AutocompleteProvider,
 	CombinedAutocompleteProvider,
 	type SlashCommand,
 } from "./autocomplete.js";
-// Components
+// UI 组件
 export { Box } from "./components/box.js";
 export { CancellableLoader } from "./components/cancellable-loader.js";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.js";
@@ -20,11 +35,11 @@ export { type SettingItem, SettingsList, type SettingsListTheme } from "./compon
 export { Spacer } from "./components/spacer.js";
 export { Text } from "./components/text.js";
 export { TruncatedText } from "./components/truncated-text.js";
-// Editor component interface (for custom editors)
+// 编辑器组件接口（用于自定义编辑器实现）
 export type { EditorComponent } from "./editor-component.js";
-// Fuzzy matching
+// 模糊匹配工具
 export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy.js";
-// Keybindings
+// 快捷键绑定
 export {
 	DEFAULT_EDITOR_KEYBINDINGS,
 	type EditorAction,
@@ -33,7 +48,7 @@ export {
 	getEditorKeybindings,
 	setEditorKeybindings,
 } from "./keybindings.js";
-// Keyboard input handling
+// 键盘输入处理
 export {
 	isKeyRelease,
 	isKeyRepeat,
@@ -45,11 +60,11 @@ export {
 	parseKey,
 	setKittyProtocolActive,
 } from "./keys.js";
-// Input buffering for batch splitting
+// 标准输入缓冲（用于批量分割输入序列）
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.js";
-// Terminal interface and implementations
+// 终端接口和实现
 export { ProcessTerminal, type Terminal } from "./terminal.js";
-// Terminal image support
+// 终端图像支持
 export {
 	allocateImageId,
 	type CellDimensions,
@@ -88,5 +103,5 @@ export {
 	type SizeValue,
 	TUI,
 } from "./tui.js";
-// Utilities
+// 文本处理工具函数
 export { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "./utils.js";

@@ -1,10 +1,17 @@
+/**
+ * @file ArtifactsRuntimeProvider.ts
+ * @description 制品运行时提供者。
+ * 为沙箱代码提供对会话制品的编程访问能力，
+ * 支持创建、读取、更新和删除制品，区分读写/只读模式。
+ */
+
 import {
 	ARTIFACTS_RUNTIME_PROVIDER_DESCRIPTION_RO,
 	ARTIFACTS_RUNTIME_PROVIDER_DESCRIPTION_RW,
 } from "../../prompts/prompts.js";
 import type { SandboxRuntimeProvider } from "./SandboxRuntimeProvider.js";
 
-// Define minimal interface for ArtifactsPanel to avoid circular dependencies
+/** ArtifactsPanel 的最小接口，避免循环依赖 */
 interface ArtifactsPanelLike {
 	artifacts: Map<string, { content: string }>;
 	tool: {
@@ -17,11 +24,9 @@ interface AgentLike {
 }
 
 /**
- * Artifacts Runtime Provider
- *
- * Provides programmatic access to session artifacts from sandboxed code.
- * Allows code to create, read, update, and delete artifacts dynamically.
- * Supports both online (extension) and offline (downloaded HTML) modes.
+ * 制品运行时提供者。
+ * 向沙箱代码暴露 listArtifacts、getArtifact、createOrUpdateArtifact、deleteArtifact 等函数，
+ * 支持在线（扩展）和离线（下载的 HTML）两种模式。
  */
 export class ArtifactsRuntimeProvider implements SandboxRuntimeProvider {
 	constructor(

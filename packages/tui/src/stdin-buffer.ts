@@ -1,31 +1,34 @@
 /**
- * StdinBuffer buffers input and emits complete sequences.
+ * @file 标准输入缓冲区
  *
- * This is necessary because stdin data events can arrive in partial chunks,
- * especially for escape sequences like mouse events. Without buffering,
- * partial sequences can be misinterpreted as regular keypresses.
+ * StdinBuffer 缓冲输入数据并发出完整的序列。
  *
- * For example, the mouse SGR sequence `\x1b[<35;20;5m` might arrive as:
- * - Event 1: `\x1b`
- * - Event 2: `[<35`
- * - Event 3: `;20;5m`
+ * 这是必要的，因为 stdin data 事件可能以部分块的方式到达，
+ * 特别是鼠标事件等转义序列。没有缓冲的话，
+ * 部分序列可能被误解为普通按键。
  *
- * The buffer accumulates these until a complete sequence is detected.
- * Call the `process()` method to feed input data.
+ * 例如，鼠标 SGR 序列 `\x1b[<35;20;5m` 可能分三次到达：
+ * - 事件 1: `\x1b`
+ * - 事件 2: `[<35`
+ * - 事件 3: `;20;5m`
  *
- * Based on code from OpenTUI (https://github.com/anomalyco/opentui)
- * MIT License - Copyright (c) 2025 opentui
+ * 缓冲区会累积这些数据直到检测到完整序列。
+ * 通过调用 `process()` 方法来送入输入数据。
+ *
+ * 基于 OpenTUI (https://github.com/anomalyco/opentui) 的代码
+ * MIT 许可证 - Copyright (c) 2025 opentui
  */
 
 import { EventEmitter } from "events";
 
+/** ESC 转义字符 */
 const ESC = "\x1b";
+/** 括号粘贴模式起始标记 */
 const BRACKETED_PASTE_START = "\x1b[200~";
+/** 括号粘贴模式结束标记 */
 const BRACKETED_PASTE_END = "\x1b[201~";
 
-/**
- * Check if a string is a complete escape sequence or needs more data
- */
+/** 检查字符串是否为完整的转义序列，还是需要更多数据 */
 function isCompleteSequence(data: string): "complete" | "incomplete" | "not-escape" {
 	if (!data.startsWith(ESC)) {
 		return "not-escape";
@@ -78,8 +81,8 @@ function isCompleteSequence(data: string): "complete" | "incomplete" | "not-esca
 }
 
 /**
- * Check if CSI sequence is complete
- * CSI sequences: ESC [ ... followed by a final byte (0x40-0x7E)
+ * 检查 CSI 序列是否完整。
+ * CSI 序列格式：ESC [ ... 后跟终止字节 (0x40-0x7E)
  */
 function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
 	if (!data.startsWith(`${ESC}[`)) {
@@ -126,8 +129,8 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
 }
 
 /**
- * Check if OSC sequence is complete
- * OSC sequences: ESC ] ... ST (where ST is ESC \ or BEL)
+ * 检查 OSC 序列是否完整。
+ * OSC 序列格式：ESC ] ... ST（ST 为 ESC \ 或 BEL）
  */
 function isCompleteOscSequence(data: string): "complete" | "incomplete" {
 	if (!data.startsWith(`${ESC}]`)) {
@@ -143,9 +146,9 @@ function isCompleteOscSequence(data: string): "complete" | "incomplete" {
 }
 
 /**
- * Check if DCS (Device Control String) sequence is complete
- * DCS sequences: ESC P ... ST (where ST is ESC \)
- * Used for XTVersion responses like ESC P >| ... ESC \
+ * 检查 DCS（设备控制字符串）序列是否完整。
+ * DCS 序列格式：ESC P ... ST（ST 为 ESC \）
+ * 用于 XTVersion 响应，如 ESC P >| ... ESC \
  */
 function isCompleteDcsSequence(data: string): "complete" | "incomplete" {
 	if (!data.startsWith(`${ESC}P`)) {
@@ -161,9 +164,9 @@ function isCompleteDcsSequence(data: string): "complete" | "incomplete" {
 }
 
 /**
- * Check if APC (Application Program Command) sequence is complete
- * APC sequences: ESC _ ... ST (where ST is ESC \)
- * Used for Kitty graphics responses like ESC _ G ... ESC \
+ * 检查 APC（应用程序命令）序列是否完整。
+ * APC 序列格式：ESC _ ... ST（ST 为 ESC \）
+ * 用于 Kitty 图形响应，如 ESC _ G ... ESC \
  */
 function isCompleteApcSequence(data: string): "complete" | "incomplete" {
 	if (!data.startsWith(`${ESC}_`)) {
@@ -178,9 +181,7 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
 	return "incomplete";
 }
 
-/**
- * Split accumulated buffer into complete sequences
- */
+/** 将累积的缓冲区拆分为完整的序列 */
 function extractCompleteSequences(buffer: string): { sequences: string[]; remainder: string } {
 	const sequences: string[] = [];
 	let pos = 0;
@@ -223,28 +224,38 @@ function extractCompleteSequences(buffer: string): { sequences: string[]; remain
 	return { sequences, remainder: "" };
 }
 
+/** StdinBuffer 配置选项 */
 export type StdinBufferOptions = {
 	/**
-	 * Maximum time to wait for sequence completion (default: 10ms)
-	 * After this time, the buffer is flushed even if incomplete
+	 * 等待序列完成的最大时间（默认 10ms）。
+	 * 超时后即使序列不完整也会刷新缓冲区。
 	 */
 	timeout?: number;
 };
 
+/** StdinBuffer 事件映射类型 */
 export type StdinBufferEventMap = {
+	/** 完整的输入序列 */
 	data: [string];
+	/** 括号粘贴模式中的粘贴内容 */
 	paste: [string];
 };
 
 /**
- * Buffers stdin input and emits complete sequences via the 'data' event.
- * Handles partial escape sequences that arrive across multiple chunks.
+ * 标准输入缓冲区。
+ * 缓冲 stdin 输入并通过 'data' 事件发出完整的序列。
+ * 处理跨多个数据块到达的部分转义序列。
  */
 export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
+	/** 输入缓冲区 */
 	private buffer: string = "";
+	/** 超时定时器句柄 */
 	private timeout: ReturnType<typeof setTimeout> | null = null;
+	/** 超时时间（毫秒） */
 	private readonly timeoutMs: number;
+	/** 是否处于括号粘贴模式 */
 	private pasteMode: boolean = false;
+	/** 粘贴内容缓冲区 */
 	private pasteBuffer: string = "";
 
 	constructor(options: StdinBufferOptions = {}) {
@@ -252,6 +263,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		this.timeoutMs = options.timeout ?? 10;
 	}
 
+	/** 处理输入数据，提取完整序列并发出事件 */
 	public process(data: string | Buffer): void {
 		// Clear any pending timeout
 		if (this.timeout) {
@@ -351,6 +363,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		}
 	}
 
+	/** 刷新缓冲区，返回所有待处理的序列 */
 	flush(): string[] {
 		if (this.timeout) {
 			clearTimeout(this.timeout);
@@ -366,6 +379,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		return sequences;
 	}
 
+	/** 清除所有缓冲区状态和定时器 */
 	clear(): void {
 		if (this.timeout) {
 			clearTimeout(this.timeout);
@@ -376,10 +390,12 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		this.pasteBuffer = "";
 	}
 
+	/** 获取当前缓冲区内容 */
 	getBuffer(): string {
 		return this.buffer;
 	}
 
+	/** 销毁缓冲区，清除所有状态 */
 	destroy(): void {
 		this.clear();
 	}

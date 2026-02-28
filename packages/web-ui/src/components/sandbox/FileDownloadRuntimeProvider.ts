@@ -1,5 +1,13 @@
+/**
+ * @file FileDownloadRuntimeProvider.ts
+ * @description 文件下载运行时提供者。
+ * 向沙箱代码暴露 returnDownloadableFile() 函数，
+ * 允许沙箱代码创建用户可下载的文件。
+ */
+
 import type { SandboxRuntimeProvider } from "./SandboxRuntimeProvider.js";
 
+/** 可下载文件接口 */
 export interface DownloadableFile {
 	fileName: string;
 	content: string | Uint8Array;
@@ -7,12 +15,10 @@ export interface DownloadableFile {
 }
 
 /**
- * File Download Runtime Provider
- *
- * Provides returnDownloadableFile() for creating user downloads.
- * Files returned this way are NOT accessible to the LLM later (one-time download).
- * Works both online (sends to extension) and offline (triggers browser download directly).
- * Collects files for retrieval by caller.
+ * 文件下载运行时提供者。
+ * 提供 returnDownloadableFile() 函数用于创建用户下载。
+ * 通过此方式返回的文件不会被 LLM 后续访问（一次性下载）。
+ * 同时支持在线（发送到扩展）和离线（直接触发浏览器下载）模式。
  */
 export class FileDownloadRuntimeProvider implements SandboxRuntimeProvider {
 	private files: DownloadableFile[] = [];

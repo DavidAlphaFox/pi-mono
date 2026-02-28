@@ -1,16 +1,19 @@
 /**
- * AgentSession - Core abstraction for agent lifecycle and session management.
+ * AgentSession - 智能体生命周期和会话管理的核心抽象
  *
- * This class is shared between all run modes (interactive, print, rpc).
- * It encapsulates:
- * - Agent state access
- * - Event subscription with automatic session persistence
- * - Model and thinking level management
- * - Compaction (manual and auto)
- * - Bash execution
- * - Session switching and branching
+ * 本类在所有运行模式（交互式、打印、RPC）之间共享。
+ * 封装了以下功能：
+ * - 智能体状态访问（模型、消息、工具等）
+ * - 事件订阅与自动会话持久化
+ * - 模型选择与思考级别管理
+ * - 上下文压缩（手动和自动）
+ * - Bash 命令执行
+ * - 会话切换和分支管理
+ * - 扩展系统集成（命令、工具、事件）
+ * - 技能和提示模板展开
+ * - 自动重试（可恢复错误）
  *
- * Modes use this class and add their own I/O layer on top.
+ * 各运行模式使用此类并在其上添加各自的 I/O 层。
  */
 
 import { readFileSync } from "node:fs";
@@ -85,7 +88,7 @@ import { createAllTools } from "./tools/index.js";
 // Skill Block Parsing
 // ============================================================================
 
-/** Parsed skill block from a user message */
+/** 从用户消息中解析出的技能块 */
 export interface ParsedSkillBlock {
 	name: string;
 	location: string;
@@ -94,8 +97,8 @@ export interface ParsedSkillBlock {
 }
 
 /**
- * Parse a skill block from message text.
- * Returns null if the text doesn't contain a skill block.
+ * 从消息文本中解析技能块。
+ * 如果文本不包含技能块，返回 null。
  */
 export function parseSkillBlock(text: string): ParsedSkillBlock | null {
 	const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
@@ -108,7 +111,7 @@ export function parseSkillBlock(text: string): ParsedSkillBlock | null {
 	};
 }
 
-/** Session-specific events that extend the core AgentEvent */
+/** 会话特有的事件类型，扩展核心 AgentEvent */
 export type AgentSessionEvent =
 	| AgentEvent
 	| { type: "auto_compaction_start"; reason: "threshold" | "overflow" }
@@ -122,13 +125,14 @@ export type AgentSessionEvent =
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
 
-/** Listener function for agent session events */
+/** 智能体会话事件的监听函数类型 */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 
 // ============================================================================
 // Types
 // ============================================================================
 
+/** AgentSession 的构造配置 */
 export interface AgentSessionConfig {
 	agent: Agent;
 	sessionManager: SessionManager;
@@ -157,7 +161,7 @@ export interface ExtensionBindings {
 	onError?: ExtensionErrorListener;
 }
 
-/** Options for AgentSession.prompt() */
+/** AgentSession.prompt() 的选项 */
 export interface PromptOptions {
 	/** Whether to expand file-based prompt templates (default: true) */
 	expandPromptTemplates?: boolean;
@@ -169,7 +173,7 @@ export interface PromptOptions {
 	source?: InputSource;
 }
 
-/** Result from cycleModel() */
+/** cycleModel() 的返回结果 */
 export interface ModelCycleResult {
 	model: Model<any>;
 	thinkingLevel: ThinkingLevel;
@@ -177,7 +181,7 @@ export interface ModelCycleResult {
 	isScoped: boolean;
 }
 
-/** Session statistics for /session command */
+/** /session 命令的会话统计信息 */
 export interface SessionStats {
 	sessionFile: string | undefined;
 	sessionId: string;

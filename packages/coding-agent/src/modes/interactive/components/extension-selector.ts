@@ -1,6 +1,8 @@
 /**
- * Generic selector component for extensions.
- * Displays a list of string options with keyboard navigation.
+ * 扩展通用选择器组件。
+ *
+ * 该文件提供用于扩展系统的通用列表选择器，
+ * 支持键盘导航、可选超时倒计时和选择/取消回调。
  */
 
 import { Container, getEditorKeybindings, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
@@ -9,11 +11,16 @@ import { CountdownTimer } from "./countdown-timer.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint, rawKeyHint } from "./keybinding-hints.js";
 
+/** 扩展选择器配置选项 */
 export interface ExtensionSelectorOptions {
 	tui?: TUI;
 	timeout?: number;
 }
 
+/**
+ * 扩展通用选择器组件。
+ * 在边框内显示标题和选项列表，支持上下键导航和可选的超时倒计时。
+ */
 export class ExtensionSelectorComponent extends Container {
 	private options: string[];
 	private selectedIndex = 0;

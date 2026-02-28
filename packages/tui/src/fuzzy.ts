@@ -1,14 +1,26 @@
 /**
- * Fuzzy matching utilities.
- * Matches if all query characters appear in order (not necessarily consecutive).
- * Lower score = better match.
+ * @file 模糊匹配工具
+ *
+ * 提供模糊匹配功能，当查询字符串的所有字符按顺序出现在目标文本中时视为匹配。
+ * 分数越低表示匹配越好。评分机制考虑：
+ * - 连续匹配奖励
+ * - 间隔惩罚
+ * - 单词边界匹配奖励
+ * - 字母数字互换回退匹配
  */
 
+/** 模糊匹配结果 */
 export interface FuzzyMatch {
+	/** 是否匹配 */
 	matches: boolean;
+	/** 匹配分数（越低越好） */
 	score: number;
 }
 
+/**
+ * 对查询字符串和目标文本执行模糊匹配。
+ * 如果主匹配失败，会尝试交换字母和数字的顺序再次匹配。
+ */
 export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 	const queryLower = query.toLowerCase();
 	const textLower = text.toLowerCase();
@@ -89,8 +101,8 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 }
 
 /**
- * Filter and sort items by fuzzy match quality (best matches first).
- * Supports space-separated tokens: all tokens must match.
+ * 按模糊匹配质量过滤并排序项目（最佳匹配在前）。
+ * 支持空格分隔的多词查询：所有词都必须匹配。
  */
 export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => string): T[] {
 	if (!query.trim()) {

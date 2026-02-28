@@ -1,31 +1,36 @@
 /**
- * Print mode (single-shot): Send prompts, output result, exit.
+ * 打印模式（单次运行模式）：发送提示词，输出结果，然后退出。
  *
- * Used for:
- * - `pi -p "prompt"` - text output
- * - `pi --mode json "prompt"` - JSON event stream
+ * 该模式用于非交互式场景：
+ * - `pi -p "prompt"` — 文本输出模式，仅输出最终的助手回复文本
+ * - `pi --mode json "prompt"` — JSON 事件流模式，输出所有代理事件
+ *
+ * 适用于脚本调用、管道操作和 CI/CD 集成等场景。
  */
 
 import type { AssistantMessage, ImageContent } from "@mariozechner/pi-ai";
 import type { AgentSession } from "../core/agent-session.js";
 
 /**
- * Options for print mode.
+ * 打印模式的配置选项。
  */
 export interface PrintModeOptions {
-	/** Output mode: "text" for final response only, "json" for all events */
+	/** 输出模式："text" 仅输出最终响应文本，"json" 输出所有事件的 JSON 流 */
 	mode: "text" | "json";
-	/** Array of additional prompts to send after initialMessage */
+	/** 在 initialMessage 之后要发送的额外提示词数组 */
 	messages?: string[];
-	/** First message to send (may contain @file content) */
+	/** 启动时发送的第一条消息（可包含 @file 引用内容） */
 	initialMessage?: string;
-	/** Images to attach to the initial message */
+	/** 附加到初始消息的图片内容 */
 	initialImages?: ImageContent[];
 }
 
 /**
- * Run in print (single-shot) mode.
- * Sends prompts to the agent and outputs the result.
+ * 以打印（单次运行）模式运行代理。
+ * 向代理发送提示词，输出结果后返回。
+ *
+ * @param session - 代理会话实例
+ * @param options - 打印模式配置选项
  */
 export async function runPrintMode(session: AgentSession, options: PrintModeOptions): Promise<void> {
 	const { mode, messages = [], initialMessage, initialImages } = options;
@@ -35,7 +40,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 			console.log(JSON.stringify(header));
 		}
 	}
-	// Set up extensions for print mode (no UI)
+	// 为打印模式初始化扩展（无 UI 界面）
 	await session.bindExtensions({
 		commandContextActions: {
 			waitForIdle: () => session.agent.waitForIdle(),
@@ -72,25 +77,25 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 		},
 	});
 
-	// Always subscribe to enable session persistence via _handleAgentEvent
+	// 始终订阅事件以支持通过 _handleAgentEvent 进行会话持久化
 	session.subscribe((event) => {
-		// In JSON mode, output all events
+		// JSON 模式下输出所有事件
 		if (mode === "json") {
 			console.log(JSON.stringify(event));
 		}
 	});
 
-	// Send initial message with attachments
+	// 发送带附件的初始消息
 	if (initialMessage) {
 		await session.prompt(initialMessage, { images: initialImages });
 	}
 
-	// Send remaining messages
+	// 发送剩余的消息
 	for (const message of messages) {
 		await session.prompt(message);
 	}
 
-	// In text mode, output final response
+	// 在文本模式下，输出最终的助手响应
 	if (mode === "text") {
 		const state = session.state;
 		const lastMessage = state.messages[state.messages.length - 1];
@@ -98,13 +103,13 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 		if (lastMessage?.role === "assistant") {
 			const assistantMsg = lastMessage as AssistantMessage;
 
-			// Check for error/aborted
+			// 检查是否出错或被中止
 			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
 				console.error(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
 				process.exit(1);
 			}
 
-			// Output text content
+			// 输出文本内容
 			for (const content of assistantMsg.content) {
 				if (content.type === "text") {
 					console.log(content.text);
@@ -113,8 +118,8 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 		}
 	}
 
-	// Ensure stdout is fully flushed before returning
-	// This prevents race conditions where the process exits before all output is written
+	// 确保 stdout 完全刷新后再返回
+	// 防止进程在所有输出写入前退出的竞争条件
 	await new Promise<void>((resolve, reject) => {
 		process.stdout.write("", (err) => {
 			if (err) reject(err);

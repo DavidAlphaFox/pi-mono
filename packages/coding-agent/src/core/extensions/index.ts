@@ -1,5 +1,11 @@
 /**
- * Extension system for lifecycle events and custom tools.
+ * 扩展系统模块入口文件
+ *
+ * 本模块实现了编码智能体的扩展系统，允许通过 TypeScript 模块扩展功能：
+ * - types.ts: 扩展系统的所有类型定义（事件、上下文、工具等）
+ * - loader.ts: 扩展加载器（发现、加载和初始化扩展模块）
+ * - runner.ts: 扩展运行器（管理扩展生命周期、分发事件）
+ * - wrapper.ts: 工具包装器（将扩展注册的工具与事件回调集成）
  */
 
 export type { SlashCommandInfo, SlashCommandLocation, SlashCommandSource } from "../slash-commands.js";

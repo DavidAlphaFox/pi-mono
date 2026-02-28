@@ -1,17 +1,30 @@
 #!/usr/bin/env node
+/**
+ * @file CLI 工具入口
+ *
+ * 提供命令行界面用于 OAuth 登录和提供商管理：
+ * - login：通过 OAuth 流程登录指定提供商（Anthropic、GitHub Copilot、Google 等）
+ * - list：列出所有可用的 OAuth 提供商
+ *
+ * 凭据保存到本地 auth.json 文件中。
+ */
 
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { createInterface } from "readline";
 import { getOAuthProvider, getOAuthProviders } from "./utils/oauth/index.js";
 import type { OAuthCredentials, OAuthProviderId } from "./utils/oauth/types.js";
 
+/** 凭据存储文件路径 */
 const AUTH_FILE = "auth.json";
+/** 所有已注册的 OAuth 提供商列表 */
 const PROVIDERS = getOAuthProviders();
 
+/** 封装 readline 的问答交互为 Promise */
 function prompt(rl: ReturnType<typeof createInterface>, question: string): Promise<string> {
 	return new Promise((resolve) => rl.question(question, resolve));
 }
 
+/** 从 auth.json 加载已保存的认证凭据 */
 function loadAuth(): Record<string, { type: "oauth" } & OAuthCredentials> {
 	if (!existsSync(AUTH_FILE)) return {};
 	try {
@@ -21,10 +34,12 @@ function loadAuth(): Record<string, { type: "oauth" } & OAuthCredentials> {
 	}
 }
 
+/** 将认证凭据保存到 auth.json */
 function saveAuth(auth: Record<string, { type: "oauth" } & OAuthCredentials>): void {
 	writeFileSync(AUTH_FILE, JSON.stringify(auth, null, 2), "utf-8");
 }
 
+/** 执行指定提供商的 OAuth 登录流程，并将凭据保存到本地 */
 async function login(providerId: OAuthProviderId): Promise<void> {
 	const provider = getOAuthProvider(providerId);
 	if (!provider) {
@@ -58,6 +73,7 @@ async function login(providerId: OAuthProviderId): Promise<void> {
 	}
 }
 
+/** CLI 主函数，解析命令行参数并执行对应操作 */
 async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 	const command = args[0];

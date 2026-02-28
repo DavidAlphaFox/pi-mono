@@ -1,15 +1,25 @@
+/**
+ * @file custom-providers-store.ts
+ * @description 自定义 LLM 提供商 Store。
+ * 管理用户添加的自定义提供商配置（本地服务器和远程 API），
+ * 区分自动发现类型（运行时获取模型）和手动配置类型（模型存储在 provider 对象中）。
+ */
+
 import type { Model } from "@mariozechner/pi-ai";
 import { Store } from "../store.js";
 import type { StoreConfig } from "../types.js";
 
+/** 支持自动发现的提供商类型 */
 export type AutoDiscoveryProviderType = "ollama" | "llama.cpp" | "vllm" | "lmstudio";
 
+/** 自定义提供商类型（包括自动发现和手动配置） */
 export type CustomProviderType =
-	| AutoDiscoveryProviderType // Auto-discovery - models fetched on-demand
-	| "openai-completions" // Manual models - stored in provider.models
-	| "openai-responses" // Manual models - stored in provider.models
-	| "anthropic-messages"; // Manual models - stored in provider.models
+	| AutoDiscoveryProviderType // 自动发现 - 模型按需获取
+	| "openai-completions" // 手动配置 - 模型存储在 provider.models 中
+	| "openai-responses" // 手动配置 - 模型存储在 provider.models 中
+	| "anthropic-messages"; // 手动配置 - 模型存储在 provider.models 中
 
+/** 自定义提供商配置接口 */
 export interface CustomProvider {
 	id: string; // UUID
 	name: string; // Display name, also used as Model.provider
@@ -23,7 +33,8 @@ export interface CustomProvider {
 }
 
 /**
- * Store for custom LLM providers (auto-discovery servers + manual providers).
+ * 自定义 LLM 提供商 Store。
+ * 提供 CRUD 操作和订阅变更通知功能。
  */
 export class CustomProvidersStore extends Store {
 	getConfig(): StoreConfig {

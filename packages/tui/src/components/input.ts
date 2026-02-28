@@ -1,3 +1,15 @@
+/**
+ * @file 单行输入组件
+ *
+ * 提供单行文本输入功能，支持：
+ * - 水平滚动（文本超出宽度时）
+ * - Emacs 风格的 Kill Ring（Ctrl+K/Ctrl+Y）
+ * - 单词级光标移动和删除
+ * - 撤销操作
+ * - 括号粘贴模式
+ * - 字位正确的光标移动（支持 Unicode）
+ */
+
 import { getEditorKeybindings } from "../keybindings.js";
 import { KillRing } from "../kill-ring.js";
 import { type Component, CURSOR_MARKER, type Focusable } from "../tui.js";
@@ -6,43 +18,55 @@ import { getSegmenter, isPunctuationChar, isWhitespaceChar, visibleWidth } from 
 
 const segmenter = getSegmenter();
 
+/** 输入组件的状态快照（用于撤销） */
 interface InputState {
+	/** 当前输入值 */
 	value: string;
+	/** 光标位置 */
 	cursor: number;
 }
 
 /**
- * Input component - single-line text input with horizontal scrolling
+ * 单行输入组件 - 支持水平滚动的文本输入。
+ * 实现了完整的文本编辑功能，包括光标移动、删除、Kill Ring 和撤销。
  */
 export class Input implements Component, Focusable {
+	/** 当前输入值 */
 	private value: string = "";
-	private cursor: number = 0; // Cursor position in the value
+	/** 光标在值中的位置 */
+	private cursor: number = 0;
+	/** 用户提交时的回调 */
 	public onSubmit?: (value: string) => void;
+	/** 用户按 Escape 时的回调 */
 	public onEscape?: () => void;
 
-	/** Focusable interface - set by TUI when focus changes */
+	/** Focusable 接口 - TUI 在焦点变化时设置 */
 	focused: boolean = false;
 
-	// Bracketed paste mode buffering
+	// 括号粘贴模式缓冲
 	private pasteBuffer: string = "";
 	private isInPaste: boolean = false;
 
-	// Kill ring for Emacs-style kill/yank operations
+	// Emacs 风格 Kill Ring
 	private killRing = new KillRing();
+	/** 上一次操作类型（用于 Kill Ring 累积和撤销合并） */
 	private lastAction: "kill" | "yank" | "type-word" | null = null;
 
-	// Undo support
+	// 撤销支持
 	private undoStack = new UndoStack<InputState>();
 
+	/** 获取当前输入值 */
 	getValue(): string {
 		return this.value;
 	}
 
+	/** 设置输入值并调整光标位置 */
 	setValue(value: string): void {
 		this.value = value;
 		this.cursor = Math.min(this.cursor, value.length);
 	}
 
+	/** 处理键盘输入（按键、粘贴等） */
 	handleInput(data: string): void {
 		// Handle bracketed paste mode
 		// Start of paste: \x1b[200~

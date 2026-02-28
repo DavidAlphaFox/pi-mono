@@ -1,3 +1,10 @@
+/**
+ * @file PdfArtifact.ts
+ * @description PDF 制品展示组件（<pdf-artifact>）。
+ * 使用 pdf.js 将 Base64 编码的 PDF 渲染到 Canvas 中，
+ * 支持多页展示和下载功能。
+ */
+
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { html, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -5,7 +12,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
-// Configure PDF.js worker
+// 配置 PDF.js Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
 @customElement("pdf-artifact")

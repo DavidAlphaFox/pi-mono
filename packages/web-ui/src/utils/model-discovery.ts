@@ -1,12 +1,21 @@
+/**
+ * @file model-discovery.ts
+ * @description 本地 LLM 服务器模型发现工具。
+ * 支持从 Ollama、llama.cpp、vLLM 和 LM Studio 服务器自动发现可用模型，
+ * 并将其转换为统一的 Model 接口格式。
+ */
+
 import { LMStudioClient } from "@lmstudio/sdk";
 import type { Model } from "@mariozechner/pi-ai";
 import { Ollama } from "ollama/browser";
 
 /**
- * Discover models from an Ollama server.
- * @param baseUrl - Base URL of the Ollama server (e.g., "http://localhost:11434")
- * @param apiKey - Optional API key (currently unused by Ollama)
- * @returns Array of discovered models
+ * 从 Ollama 服务器发现可用模型。
+ * 使用 Ollama SDK 获取模型列表，过滤出支持工具调用的模型，
+ * 并提取上下文窗口大小、推理能力等信息。
+ * @param baseUrl - Ollama 服务器基础 URL（如 "http://localhost:11434"）
+ * @param _apiKey - 可选 API Key（Ollama 当前未使用）
+ * @returns 发现的模型数组
  */
 export async function discoverOllamaModels(baseUrl: string, _apiKey?: string): Promise<Model<any>[]> {
 	try {
@@ -77,10 +86,11 @@ export async function discoverOllamaModels(baseUrl: string, _apiKey?: string): P
 }
 
 /**
- * Discover models from a llama.cpp server via OpenAI-compatible /v1/models endpoint.
- * @param baseUrl - Base URL of the llama.cpp server (e.g., "http://localhost:8080")
- * @param apiKey - Optional API key
- * @returns Array of discovered models
+ * 从 llama.cpp 服务器发现可用模型。
+ * 通过 OpenAI 兼容的 /v1/models 端点获取模型列表。
+ * @param baseUrl - llama.cpp 服务器基础 URL（如 "http://localhost:8080"）
+ * @param apiKey - 可选 API Key
+ * @returns 发现的模型数组
  */
 export async function discoverLlamaCppModels(baseUrl: string, apiKey?: string): Promise<Model<any>[]> {
 	try {
@@ -139,10 +149,12 @@ export async function discoverLlamaCppModels(baseUrl: string, apiKey?: string): 
 }
 
 /**
- * Discover models from a vLLM server via OpenAI-compatible /v1/models endpoint.
- * @param baseUrl - Base URL of the vLLM server (e.g., "http://localhost:8000")
- * @param apiKey - Optional API key
- * @returns Array of discovered models
+ * 从 vLLM 服务器发现可用模型。
+ * 通过 OpenAI 兼容的 /v1/models 端点获取模型列表。
+ * vLLM 提供 max_model_len 字段作为上下文窗口大小。
+ * @param baseUrl - vLLM 服务器基础 URL（如 "http://localhost:8000"）
+ * @param apiKey - 可选 API Key
+ * @returns 发现的模型数组
  */
 export async function discoverVLLMModels(baseUrl: string, apiKey?: string): Promise<Model<any>[]> {
 	try {
@@ -201,10 +213,12 @@ export async function discoverVLLMModels(baseUrl: string, apiKey?: string): Prom
 }
 
 /**
- * Discover models from an LM Studio server using the LM Studio SDK.
- * @param baseUrl - Base URL of the LM Studio server (e.g., "http://localhost:1234")
- * @param apiKey - Optional API key (unused for LM Studio SDK)
- * @returns Array of discovered models
+ * 从 LM Studio 服务器发现可用模型。
+ * 使用 LM Studio SDK 通过 WebSocket 连接获取已下载的模型列表，
+ * 仅保留 LLM 类型的模型，并提取视觉和工具使用能力信息。
+ * @param baseUrl - LM Studio 服务器基础 URL（如 "http://localhost:1234"）
+ * @param _apiKey - 可选 API Key（LM Studio SDK 未使用）
+ * @returns 发现的模型数组
  */
 export async function discoverLMStudioModels(baseUrl: string, _apiKey?: string): Promise<Model<any>[]> {
 	try {
@@ -253,11 +267,12 @@ export async function discoverLMStudioModels(baseUrl: string, _apiKey?: string):
 }
 
 /**
- * Convenience function to discover models based on provider type.
- * @param type - Provider type
- * @param baseUrl - Base URL of the server
- * @param apiKey - Optional API key
- * @returns Array of discovered models
+ * 根据提供商类型发现模型的便捷函数。
+ * 根据 type 参数分发到对应的发现函数。
+ * @param type - 提供商类型（"ollama" | "llama.cpp" | "vllm" | "lmstudio"）
+ * @param baseUrl - 服务器基础 URL
+ * @param apiKey - 可选 API Key
+ * @returns 发现的模型数组
  */
 export async function discoverModels(
 	type: "ollama" | "llama.cpp" | "vllm" | "lmstudio",

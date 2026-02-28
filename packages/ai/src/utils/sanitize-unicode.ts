@@ -1,5 +1,14 @@
 /**
- * Removes unpaired Unicode surrogate characters from a string.
+ * @file Unicode 代理对清理工具
+ *
+ * 移除字符串中不成对的 Unicode 代理字符。
+ * 不成对的代理字符（高代理 0xD800-0xDBFF 没有匹配的低代理 0xDC00-0xDFFF，
+ * 或反之）会导致许多 API 提供商的 JSON 序列化错误。
+ * 正常的 emoji 和基本多语言平面外的字符使用正确配对的代理对，不受此函数影响。
+ */
+
+/**
+ * 移除字符串中不成对的 Unicode 代理字符。
  *
  * Unpaired surrogates (high surrogates 0xD800-0xDBFF without matching low surrogates 0xDC00-0xDFFF,
  * or vice versa) cause JSON serialization errors in many API providers.

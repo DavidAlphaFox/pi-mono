@@ -1,6 +1,19 @@
-// Core session management
+/**
+ * 编码智能体的公共 API 导出模块
+ *
+ * 职责：
+ * - 作为整个编码智能体包的统一导出入口
+ * - 导出核心会话管理、认证、模型注册表等核心模块
+ * - 导出扩展系统、技能系统、工具系统的类型和实现
+ * - 导出 SDK 工厂函数，供编程方式使用
+ * - 导出 UI 组件、主题工具和各种实用函数
+ *
+ * 外部使用者通过此文件访问编码智能体的所有公共接口。
+ */
 
-// Config paths
+// 核心会话管理
+
+// 配置路径
 export { getAgentDir, VERSION } from "./config.js";
 export {
 	AgentSession,

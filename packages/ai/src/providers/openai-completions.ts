@@ -1,3 +1,17 @@
+/**
+ * @file OpenAI Chat Completions API 提供商
+ *
+ * 本文件实现了 OpenAI Chat Completions API 的流式调用，同时作为多种兼容 API 的通用适配器，
+ * 通过 OpenAICompletionsCompat 配置支持 20+ 提供商：
+ * - OpenAI（GPT 系列）、xAI（Grok）、Groq、Cerebras
+ * - Mistral（特殊工具 ID 格式）、z.ai（enable_thinking 格式）
+ * - OpenRouter（提供商路由）、Vercel AI Gateway
+ * - GitHub Copilot（Bearer 认证）
+ * - 以及任何 OpenAI 兼容的 API 端点
+ *
+ * 兼容性设置支持自动检测（从 baseUrl/provider 推断）和手动覆盖。
+ */
+
 import OpenAI from "openai";
 import type {
 	ChatCompletionAssistantMessageParam,

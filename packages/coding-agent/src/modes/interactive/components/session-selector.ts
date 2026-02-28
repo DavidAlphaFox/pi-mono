@@ -1,3 +1,14 @@
+/**
+ * 会话选择器组件。
+ *
+ * 该文件提供完整的会话浏览器，支持：
+ * - 搜索和过滤会话列表
+ * - 当前目录/全部会话范围切换
+ * - 会话树形视图显示
+ * - 删除、重命名、在编辑器中打开等操作
+ * - 多种排序模式（线程化、最近、相关性）
+ */
+
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
@@ -21,6 +32,7 @@ import { DynamicBorder } from "./dynamic-border.js";
 import { appKey, appKeyHint, keyHint } from "./keybinding-hints.js";
 import { filterAndSortSessions, hasSessionName, type NameFilter, type SortMode } from "./session-selector-search.js";
 
+/** 会话选择范围 */
 type SessionScope = "current" | "all";
 
 function shortenPath(path: string): string {
@@ -662,7 +674,8 @@ async function deleteSessionFile(
 }
 
 /**
- * Component that renders a session selector
+ * 会话选择器组件。
+ * 提供完整的会话浏览、搜索、删除、重命名和选择功能。
  */
 export class SessionSelectorComponent extends Container implements Focusable {
 	handleInput(data: string): void {

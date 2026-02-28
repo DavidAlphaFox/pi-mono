@@ -1,49 +1,84 @@
+/**
+ * @file 设置列表组件
+ *
+ * 提供设置项的列表视图，支持：
+ * - 值循环切换（Enter/Space）
+ * - 子菜单打开
+ * - 模糊搜索过滤
+ * - 项目描述显示
+ * - 键盘导航
+ */
+
 import { fuzzyFilter } from "../fuzzy.js";
 import { getEditorKeybindings } from "../keybindings.js";
 import type { Component } from "../tui.js";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.js";
 import { Input } from "./input.js";
 
+/** 设置项定义 */
 export interface SettingItem {
-	/** Unique identifier for this setting */
+	/** 设置项唯一标识符 */
 	id: string;
-	/** Display label (left side) */
+	/** 显示标签（左侧） */
 	label: string;
-	/** Optional description shown when selected */
+	/** 可选描述（选中时显示） */
 	description?: string;
-	/** Current value to display (right side) */
+	/** 当前值（右侧显示） */
 	currentValue: string;
-	/** If provided, Enter/Space cycles through these values */
+	/** 如果提供，Enter/Space 在这些值之间循环切换 */
 	values?: string[];
-	/** If provided, Enter opens this submenu. Receives current value and done callback. */
+	/** 如果提供，Enter 打开此子菜单。接收当前值和完成回调。 */
 	submenu?: (currentValue: string, done: (selectedValue?: string) => void) => Component;
 }
 
+/** 设置列表主题配置 */
 export interface SettingsListTheme {
+	/** 标签样式函数 */
 	label: (text: string, selected: boolean) => string;
+	/** 值样式函数 */
 	value: (text: string, selected: boolean) => string;
+	/** 描述文本样式函数 */
 	description: (text: string) => string;
+	/** 选中项光标字符串 */
 	cursor: string;
+	/** 提示文本样式函数 */
 	hint: (text: string) => string;
 }
 
+/** 设置列表选项 */
 export interface SettingsListOptions {
+	/** 是否启用搜索过滤功能 */
 	enableSearch?: boolean;
 }
 
+/**
+ * 设置列表组件。
+ * 显示设置项列表，支持值切换、子菜单和搜索过滤。
+ */
 export class SettingsList implements Component {
+	/** 所有设置项 */
 	private items: SettingItem[];
+	/** 过滤后的设置项 */
 	private filteredItems: SettingItem[];
+	/** 主题配置 */
 	private theme: SettingsListTheme;
+	/** 当前选中项索引 */
 	private selectedIndex = 0;
+	/** 最大可见行数 */
 	private maxVisible: number;
+	/** 设置值变化时的回调 */
 	private onChange: (id: string, newValue: string) => void;
+	/** 取消时的回调 */
 	private onCancel: () => void;
+	/** 搜索输入框（启用搜索时存在） */
 	private searchInput?: Input;
+	/** 是否启用搜索功能 */
 	private searchEnabled: boolean;
 
-	// Submenu state
+	// 子菜单状态
+	/** 当前打开的子菜单组件 */
 	private submenuComponent: Component | null = null;
+	/** 打开子菜单的项目索引（用于返回时恢复选择） */
 	private submenuItemIndex: number | null = null;
 
 	constructor(
@@ -66,7 +101,7 @@ export class SettingsList implements Component {
 		}
 	}
 
-	/** Update an item's currentValue */
+	/** 更新指定设置项的当前值 */
 	updateValue(id: string, newValue: string): void {
 		const item = this.items.find((i) => i.id === id);
 		if (item) {
@@ -196,6 +231,7 @@ export class SettingsList implements Component {
 		}
 	}
 
+	/** 激活当前选中项（打开子菜单或切换值） */
 	private activateItem(): void {
 		const item = this.searchEnabled ? this.filteredItems[this.selectedIndex] : this.items[this.selectedIndex];
 		if (!item) return;
@@ -220,6 +256,7 @@ export class SettingsList implements Component {
 		}
 	}
 
+	/** 关闭子菜单并恢复选择位置 */
 	private closeSubmenu(): void {
 		this.submenuComponent = null;
 		// Restore selection to the item that opened the submenu
@@ -229,6 +266,7 @@ export class SettingsList implements Component {
 		}
 	}
 
+	/** 应用模糊搜索过滤 */
 	private applyFilter(query: string): void {
 		this.filteredItems = fuzzyFilter(this.items, query, (item) => item.label);
 		this.selectedIndex = 0;

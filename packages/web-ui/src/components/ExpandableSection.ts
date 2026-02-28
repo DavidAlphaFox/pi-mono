@@ -4,8 +4,15 @@ import { customElement, property, state } from "lit/decorators.js";
 import { ChevronDown, ChevronRight } from "lucide";
 
 /**
- * Reusable expandable section component for tool renderers.
- * Captures children in connectedCallback and re-renders them in the details area.
+ * @file ExpandableSection.ts
+ * @description 可折叠区域组件（<expandable-section>）。
+ * 通用的可展开/折叠区域，用于工具渲染器等场景。
+ * 在 connectedCallback 中捕获子节点，在展开时重新渲染。
+ */
+
+/**
+ * 可折叠区域 Web Component。
+ * 点击摘要行可展开/折叠详细内容区域，使用 Chevron 图标指示状态。
  */
 @customElement("expandable-section")
 export class ExpandableSection extends LitElement {

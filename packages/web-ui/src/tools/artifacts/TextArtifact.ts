@@ -1,3 +1,10 @@
+/**
+ * @file TextArtifact.ts
+ * @description 文本/代码制品展示组件（<text-artifact>）。
+ * 根据文件扩展名自动应用语法高亮（支持 JS、Python、JSON 等数十种语言），
+ * 提供复制和下载功能。
+ */
+
 import { CopyButton } from "@mariozechner/mini-lit/dist/CopyButton.js";
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import hljs from "highlight.js";
@@ -7,7 +14,7 @@ import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
-// Known code file extensions for highlighting
+// 已知的代码文件扩展名，用于语法高亮
 const CODE_EXTENSIONS = [
 	"js",
 	"javascript",

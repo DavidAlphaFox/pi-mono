@@ -1,3 +1,15 @@
+/**
+ * 文件查找工具（Find）
+ *
+ * 本文件实现了基于 glob 模式的文件查找工具，功能包括：
+ * 1. 使用 fd 命令按 glob 模式搜索文件
+ * 2. 支持结果数量限制（默认 1000 条）
+ * 3. 自动遵守 .gitignore 规则（包括嵌套的 .gitignore）
+ * 4. 输出截断：总输出限制为 50KB
+ * 5. 返回相对于搜索目录的路径，目录带 "/" 后缀
+ * 6. 可插拔的操作接口（FindOperations），支持远程文件系统
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { spawnSync } from "child_process";
@@ -16,23 +28,28 @@ const findSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
 });
 
+/** Find 工具的输入参数类型 */
 export type FindToolInput = Static<typeof findSchema>;
 
+/** 默认结果数量上限 */
 const DEFAULT_LIMIT = 1000;
 
+/** Find 工具的详细信息 */
 export interface FindToolDetails {
+	/** 输出截断结果（如果发生了截断） */
 	truncation?: TruncationResult;
+	/** 达到结果上限时的限制值 */
 	resultLimitReached?: number;
 }
 
 /**
- * Pluggable operations for the find tool.
- * Override these to delegate file search to remote systems (e.g., SSH).
+ * Find 工具的可插拔操作接口。
+ * 可通过覆写此接口将文件查找委托给远程系统（如 SSH）。
  */
 export interface FindOperations {
-	/** Check if path exists */
+	/** 检查路径是否存在 */
 	exists: (absolutePath: string) => Promise<boolean> | boolean;
-	/** Find files matching glob pattern. Returns relative paths. */
+	/** 按 glob 模式查找文件，返回相对路径列表 */
 	glob: (pattern: string, cwd: string, options: { ignore: string[]; limit: number }) => Promise<string[]> | string[];
 }
 
@@ -44,11 +61,16 @@ const defaultFindOperations: FindOperations = {
 	},
 };
 
+/** Find 工具的配置选项 */
 export interface FindToolOptions {
-	/** Custom operations for find. Default: local filesystem + fd */
+	/** 自定义文件查找操作，默认使用本地文件系统 + fd */
 	operations?: FindOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的文件查找工具实例。
+ * 使用 fd 命令按 glob 模式搜索文件，遵守 .gitignore 规则。
+ */
 export function createFindTool(cwd: string, options?: FindToolOptions): AgentTool<typeof findSchema> {
 	const customOps = options?.operations;
 
@@ -269,5 +291,5 @@ export function createFindTool(cwd: string, options?: FindToolOptions): AgentToo
 	};
 }
 
-/** Default find tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认 Find 工具实例，保持向后兼容 */
 export const findTool = createFindTool(process.cwd());

@@ -1,5 +1,15 @@
 /**
- * Minimal TUI implementation with differential rendering
+ * @file TUI 核心实现 - 差异化终端渲染引擎
+ *
+ * 本文件实现了终端 UI 框架的核心功能，包括：
+ * - Component 组件接口定义
+ * - Container 容器组件（组合子组件）
+ * - TUI 主类（差异化渲染、焦点管理、叠加层系统、硬件光标定位）
+ *
+ * 渲染机制：
+ * TUI 使用差异化渲染策略，只更新变化的行，减少终端闪烁和带宽使用。
+ * 支持同步输出（Synchronized Output）以避免撕裂。
+ * 叠加层（Overlay）系统允许在基础内容之上渲染模态组件。
  */
 
 import * as fs from "node:fs";
@@ -11,65 +21,68 @@ import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-imag
 import { extractSegments, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils.js";
 
 /**
- * Component interface - all components must implement this
+ * 组件接口 - 所有 TUI 组件必须实现此接口
  */
 export interface Component {
 	/**
-	 * Render the component to lines for the given viewport width
-	 * @param width - Current viewport width
-	 * @returns Array of strings, each representing a line
+	 * 将组件渲染为指定视口宽度的行数组
+	 * @param width - 当前视口宽度（终端列数）
+	 * @returns 字符串数组，每个元素代表一行输出
 	 */
 	render(width: number): string[];
 
 	/**
-	 * Optional handler for keyboard input when component has focus
+	 * 可选的键盘输入处理器，当组件获得焦点时被调用
 	 */
 	handleInput?(data: string): void;
 
 	/**
-	 * If true, component receives key release events (Kitty protocol).
-	 * Default is false - release events are filtered out.
+	 * 是否接收按键释放事件（Kitty 协议特性）。
+	 * 默认为 false - 释放事件会被过滤掉。
 	 */
 	wantsKeyRelease?: boolean;
 
 	/**
-	 * Invalidate any cached rendering state.
-	 * Called when theme changes or when component needs to re-render from scratch.
+	 * 使缓存的渲染状态失效。
+	 * 在主题更改或组件需要从头重新渲染时调用。
 	 */
 	invalidate(): void;
 }
 
+/** 输入监听器的返回结果类型：consume 为 true 时消费输入，data 可用于修改输入数据 */
 type InputListenerResult = { consume?: boolean; data?: string } | undefined;
+/** 输入监听器函数类型，用于拦截和处理原始键盘输入 */
 type InputListener = (data: string) => InputListenerResult;
 
 /**
- * Interface for components that can receive focus and display a hardware cursor.
- * When focused, the component should emit CURSOR_MARKER at the cursor position
- * in its render output. TUI will find this marker and position the hardware
- * cursor there for proper IME candidate window positioning.
+ * 可聚焦组件接口 - 用于接收焦点和显示硬件光标。
+ * 当组件获得焦点时，应在渲染输出中的光标位置发出 CURSOR_MARKER。
+ * TUI 会找到此标记并定位硬件光标，以便输入法候选窗口正确显示。
  */
 export interface Focusable {
-	/** Set by TUI when focus changes. Component should emit CURSOR_MARKER when true. */
+	/** 由 TUI 在焦点变化时设置。当为 true 时，组件应在渲染中发出 CURSOR_MARKER。 */
 	focused: boolean;
 }
 
-/** Type guard to check if a component implements Focusable */
+/**
+ * 类型守卫：检查组件是否实现了 Focusable 接口
+ */
 export function isFocusable(component: Component | null): component is Component & Focusable {
 	return component !== null && "focused" in component;
 }
 
 /**
- * Cursor position marker - APC (Application Program Command) sequence.
- * This is a zero-width escape sequence that terminals ignore.
- * Components emit this at the cursor position when focused.
- * TUI finds and strips this marker, then positions the hardware cursor there.
+ * 光标位置标记 - APC（应用程序命令）转义序列。
+ * 这是一个零宽度的转义序列，终端会忽略它。
+ * 组件在获得焦点时会在光标位置发出此标记。
+ * TUI 会找到并移除此标记，然后将硬件光标定位到该位置。
  */
 export const CURSOR_MARKER = "\x1b_pi:c\x07";
 
 export { visibleWidth };
 
 /**
- * Anchor position for overlays
+ * 叠加层的锚点位置类型
  */
 export type OverlayAnchor =
 	| "center"
@@ -83,7 +96,7 @@ export type OverlayAnchor =
 	| "right-center";
 
 /**
- * Margin configuration for overlays
+ * 叠加层的边距配置
  */
 export interface OverlayMargin {
 	top?: number;
@@ -92,10 +105,10 @@ export interface OverlayMargin {
 	left?: number;
 }
 
-/** Value that can be absolute (number) or percentage (string like "50%") */
+/** 尺寸值类型：可以是绝对值（数字）或百分比（如 "50%"） */
 export type SizeValue = number | `${number}%`;
 
-/** Parse a SizeValue into absolute value given a reference size */
+/** 将 SizeValue 解析为绝对值（基于参考尺寸） */
 function parseSizeValue(value: SizeValue | undefined, referenceSize: number): number | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value === "number") return value;
@@ -108,67 +121,70 @@ function parseSizeValue(value: SizeValue | undefined, referenceSize: number): nu
 }
 
 /**
- * Options for overlay positioning and sizing.
- * Values can be absolute numbers or percentage strings (e.g., "50%").
+ * 叠加层的定位和尺寸选项。
+ * 值可以是绝对数字或百分比字符串（如 "50%"）。
  */
 export interface OverlayOptions {
-	// === Sizing ===
-	/** Width in columns, or percentage of terminal width (e.g., "50%") */
+	// === 尺寸 ===
+	/** 宽度（列数），或终端宽度的百分比（如 "50%"） */
 	width?: SizeValue;
-	/** Minimum width in columns */
+	/** 最小宽度（列数） */
 	minWidth?: number;
-	/** Maximum height in rows, or percentage of terminal height (e.g., "50%") */
+	/** 最大高度（行数），或终端高度的百分比（如 "50%"） */
 	maxHeight?: SizeValue;
 
-	// === Positioning - anchor-based ===
-	/** Anchor point for positioning (default: 'center') */
+	// === 基于锚点的定位 ===
+	/** 定位锚点（默认：'center'） */
 	anchor?: OverlayAnchor;
-	/** Horizontal offset from anchor position (positive = right) */
+	/** 相对锚点的水平偏移（正数向右） */
 	offsetX?: number;
-	/** Vertical offset from anchor position (positive = down) */
+	/** 相对锚点的垂直偏移（正数向下） */
 	offsetY?: number;
 
-	// === Positioning - percentage or absolute ===
-	/** Row position: absolute number, or percentage (e.g., "25%" = 25% from top) */
+	// === 百分比或绝对定位 ===
+	/** 行位置：绝对数字或百分比（如 "25%" 表示距顶部 25%） */
 	row?: SizeValue;
-	/** Column position: absolute number, or percentage (e.g., "50%" = centered horizontally) */
+	/** 列位置：绝对数字或百分比（如 "50%" 表示水平居中） */
 	col?: SizeValue;
 
-	// === Margin from terminal edges ===
-	/** Margin from terminal edges. Number applies to all sides. */
+	// === 终端边缘的边距 ===
+	/** 距终端边缘的边距。数字表示四边等距。 */
 	margin?: OverlayMargin | number;
 
-	// === Visibility ===
+	// === 可见性控制 ===
 	/**
-	 * Control overlay visibility based on terminal dimensions.
-	 * If provided, overlay is only rendered when this returns true.
-	 * Called each render cycle with current terminal dimensions.
+	 * 基于终端尺寸控制叠加层可见性。
+	 * 如果提供，叠加层仅在此函数返回 true 时渲染。
+	 * 每次渲染周期都会使用当前终端尺寸调用此函数。
 	 */
 	visible?: (termWidth: number, termHeight: number) => boolean;
 }
 
 /**
- * Handle returned by showOverlay for controlling the overlay
+ * showOverlay 返回的句柄，用于控制叠加层
  */
 export interface OverlayHandle {
-	/** Permanently remove the overlay (cannot be shown again) */
+	/** 永久移除叠加层（不可再次显示） */
 	hide(): void;
-	/** Temporarily hide or show the overlay */
+	/** 临时隐藏或显示叠加层 */
 	setHidden(hidden: boolean): void;
-	/** Check if overlay is temporarily hidden */
+	/** 检查叠加层是否被临时隐藏 */
 	isHidden(): boolean;
 }
 
 /**
- * Container - a component that contains other components
+ * 容器组件 - 可以包含多个子组件的组合组件
  */
 export class Container implements Component {
+	/** 子组件列表 */
 	children: Component[] = [];
 
+	/** 添加子组件 */
 	addChild(component: Component): void {
 		this.children.push(component);
 	}
 
+	/** 移除子组件 */
 	removeChild(component: Component): void {
 		const index = this.children.indexOf(component);
 		if (index !== -1) {
@@ -176,6 +192,7 @@ export class Container implements Component {
 		}
 	}
 
+	/** 清空所有子组件 */
 	clear(): void {
 		this.children = [];
 	}
@@ -196,35 +213,59 @@ export class Container implements Component {
 }
 
 /**
- * TUI - Main class for managing terminal UI with differential rendering
+ * TUI 主类 - 管理终端 UI 的差异化渲染引擎
+ *
+ * 核心职责：
+ * - 差异化渲染：只更新变化的行，减少终端闪烁
+ * - 焦点管理：跟踪和切换组件焦点
+ * - 叠加层系统：支持模态叠加层的堆栈管理
+ * - 输入路由：将键盘输入分发给聚焦的组件
+ * - 硬件光标定位：为 IME 输入法定位光标
+ * - 终端单元格尺寸查询：用于图像渲染
  */
 export class TUI extends Container {
+	/** 终端接口实例 */
 	public terminal: Terminal;
+	/** 上一次渲染的行内容（用于差异比较） */
 	private previousLines: string[] = [];
+	/** 上一次渲染时的终端宽度 */
 	private previousWidth = 0;
+	/** 当前获得焦点的组件 */
 	private focusedComponent: Component | null = null;
+	/** 输入监听器集合（拦截/修改原始输入） */
 	private inputListeners = new Set<InputListener>();
 
-	/** Global callback for debug key (Shift+Ctrl+D). Called before input is forwarded to focused component. */
+	/** 调试键（Shift+Ctrl+D）的全局回调。在输入转发给聚焦组件之前调用。 */
 	public onDebug?: () => void;
+	/** 是否已请求渲染（防止同一 tick 内重复渲染） */
 	private renderRequested = false;
-	private cursorRow = 0; // Logical cursor row (end of rendered content)
-	private hardwareCursorRow = 0; // Actual terminal cursor row (may differ due to IME positioning)
-	private inputBuffer = ""; // Buffer for parsing terminal responses
+	/** 逻辑光标行（渲染内容的末尾位置） */
+	private cursorRow = 0;
+	/** 实际终端光标行（可能因 IME 定位而不同） */
+	private hardwareCursorRow = 0;
+	/** 输入缓冲区（用于解析终端响应） */
+	private inputBuffer = "";
+	/** 是否正在等待单元格尺寸查询响应 */
 	private cellSizeQueryPending = false;
+	/** 是否显示硬件光标（用于 IME 候选窗口定位） */
 	private showHardwareCursor = process.env.PI_HARDWARE_CURSOR === "1";
-	private clearOnShrink = process.env.PI_CLEAR_ON_SHRINK === "1"; // Clear empty rows when content shrinks (default: off)
-	private maxLinesRendered = 0; // Track terminal's working area (max lines ever rendered)
-	private previousViewportTop = 0; // Track previous viewport top for resize-aware cursor moves
+	/** 内容缩小时是否清除空行（默认关闭） */
+	private clearOnShrink = process.env.PI_CLEAR_ON_SHRINK === "1";
+	/** 终端工作区域的最大行数（曾经渲染过的最多行数） */
+	private maxLinesRendered = 0;
+	/** 上一次视口顶部位置（用于调整尺寸时感知光标移动） */
+	private previousViewportTop = 0;
+	/** 完整重绘计数 */
 	private fullRedrawCount = 0;
+	/** 是否已停止 */
 	private stopped = false;
 
-	// Overlay stack for modal components rendered on top of base content
+	// 叠加层堆栈 - 在基础内容之上渲染的模态组件
 	private overlayStack: {
-		component: Component;
-		options?: OverlayOptions;
-		preFocus: Component | null;
-		hidden: boolean;
+		component: Component; // 叠加层组件
+		options?: OverlayOptions; // 定位和尺寸选项
+		preFocus: Component | null; // 显示叠加层前的焦点组件（用于恢复）
+		hidden: boolean; // 是否临时隐藏
 	}[] = [];
 
 	constructor(terminal: Terminal, showHardwareCursor?: boolean) {
@@ -235,14 +276,17 @@ export class TUI extends Container {
 		}
 	}
 
+	/** 获取完整重绘次数（用于性能监控） */
 	get fullRedraws(): number {
 		return this.fullRedrawCount;
 	}
 
+	/** 获取是否显示硬件光标 */
 	getShowHardwareCursor(): boolean {
 		return this.showHardwareCursor;
 	}
 
+	/** 设置是否显示硬件光标 */
 	setShowHardwareCursor(enabled: boolean): void {
 		if (this.showHardwareCursor === enabled) return;
 		this.showHardwareCursor = enabled;
@@ -252,21 +296,23 @@ export class TUI extends Container {
 		this.requestRender();
 	}
 
+	/** 获取内容缩小时是否清除空行 */
 	getClearOnShrink(): boolean {
 		return this.clearOnShrink;
 	}
 
 	/**
-	 * Set whether to trigger full re-render when content shrinks.
-	 * When true (default), empty rows are cleared when content shrinks.
-	 * When false, empty rows remain (reduces redraws on slower terminals).
+	 * 设置内容缩小时是否触发完整重绘。
+	 * 当为 true 时，内容缩小后会清除空行。
+	 * 当为 false 时，空行保留不清除（减少慢速终端的重绘次数）。
 	 */
 	setClearOnShrink(enabled: boolean): void {
 		this.clearOnShrink = enabled;
 	}
 
+	/** 设置焦点组件，同时更新旧组件和新组件的 focused 标志 */
 	setFocus(component: Component | null): void {
-		// Clear focused flag on old component
+		// 清除旧组件的焦点标志
 		if (isFocusable(this.focusedComponent)) {
 			this.focusedComponent.focused = false;
 		}
@@ -280,8 +326,8 @@ export class TUI extends Container {
 	}
 
 	/**
-	 * Show an overlay component with configurable positioning and sizing.
-	 * Returns a handle to control the overlay's visibility.
+	 * 显示叠加层组件，支持可配置的定位和尺寸。
+	 * 返回一个句柄用于控制叠加层的可见性。
 	 */
 	showOverlay(component: Component, options?: OverlayOptions): OverlayHandle {
 		const entry = { component, options, preFocus: this.focusedComponent, hidden: false };
@@ -330,7 +376,7 @@ export class TUI extends Container {
 		};
 	}
 
-	/** Hide the topmost overlay and restore previous focus. */
+	/** 隐藏最顶层的叠加层并恢复之前的焦点 */
 	hideOverlay(): void {
 		const overlay = this.overlayStack.pop();
 		if (!overlay) return;
@@ -341,12 +387,12 @@ export class TUI extends Container {
 		this.requestRender();
 	}
 
-	/** Check if there are any visible overlays */
+	/** 检查是否有任何可见的叠加层 */
 	hasOverlay(): boolean {
 		return this.overlayStack.some((o) => this.isOverlayVisible(o));
 	}
 
-	/** Check if an overlay entry is currently visible */
+	/** 检查叠加层条目当前是否可见 */
 	private isOverlayVisible(entry: (typeof this.overlayStack)[number]): boolean {
 		if (entry.hidden) return false;
 		if (entry.options?.visible) {
@@ -355,7 +401,7 @@ export class TUI extends Container {
 		return true;
 	}
 
-	/** Find the topmost visible overlay, if any */
+	/** 查找最顶层的可见叠加层（如果有） */
 	private getTopmostVisibleOverlay(): (typeof this.overlayStack)[number] | undefined {
 		for (let i = this.overlayStack.length - 1; i >= 0; i--) {
 			if (this.isOverlayVisible(this.overlayStack[i])) {
@@ -370,6 +416,7 @@ export class TUI extends Container {
 		for (const overlay of this.overlayStack) overlay.component.invalidate?.();
 	}
 
+	/** 启动 TUI - 开始监听输入和调整大小事件，隐藏光标并触发首次渲染 */
 	start(): void {
 		this.stopped = false;
 		this.terminal.start(
@@ -381,6 +428,7 @@ export class TUI extends Container {
 		this.requestRender();
 	}
 
+	/** 添加输入监听器，返回取消注册的函数 */
 	addInputListener(listener: InputListener): () => void {
 		this.inputListeners.add(listener);
 		return () => {
@@ -388,24 +436,27 @@ export class TUI extends Container {
 		};
 	}
 
+	/** 移除输入监听器 */
 	removeInputListener(listener: InputListener): void {
 		this.inputListeners.delete(listener);
 	}
 
+	/** 查询终端单元格的像素尺寸（仅在支持图像的终端上执行） */
 	private queryCellSize(): void {
-		// Only query if terminal supports images (cell size is only used for image rendering)
+		// 仅在终端支持图像时查询（单元格尺寸仅用于图像渲染）
 		if (!getCapabilities().images) {
 			return;
 		}
-		// Query terminal for cell size in pixels: CSI 16 t
-		// Response format: CSI 6 ; height ; width t
+		// 查询终端单元格像素尺寸：CSI 16 t
+		// 响应格式：CSI 6 ; height ; width t
 		this.cellSizeQueryPending = true;
 		this.terminal.write("\x1b[16t");
 	}
 
+	/** 停止 TUI - 将光标移到内容末尾，恢复光标可见性，停止终端 */
 	stop(): void {
 		this.stopped = true;
-		// Move cursor to the end of the content to prevent overwriting/artifacts on exit
+		// 将光标移到内容末尾，防止退出时覆盖或产生残影
 		if (this.previousLines.length > 0) {
 			const targetRow = this.previousLines.length; // Line after the last content
 			const lineDiff = targetRow - this.hardwareCursorRow;
@@ -421,6 +472,7 @@ export class TUI extends Container {
 		this.terminal.stop();
 	}
 
+	/** 请求渲染。force=true 时强制完整重绘（清除所有缓存状态） */
 	requestRender(force = false): void {
 		if (force) {
 			this.previousLines = [];
@@ -438,6 +490,7 @@ export class TUI extends Container {
 		});
 	}
 
+	/** 处理键盘输入：先经过监听器链，然后路由到聚焦的组件 */
 	private handleInput(data: string): void {
 		if (this.inputListeners.size > 0) {
 			let current = data;
@@ -496,9 +549,10 @@ export class TUI extends Container {
 		}
 	}
 
+	/** 从输入缓冲区中解析终端单元格尺寸响应，返回过滤后的用户输入 */
 	private parseCellSizeResponse(): string {
-		// Response format: ESC [ 6 ; height ; width t
-		// Match the response pattern
+		// 响应格式：ESC [ 6 ; height ; width t
+		// 匹配响应模式
 		const responsePattern = /\x1b\[6;(\d+);(\d+)t/;
 		const match = this.inputBuffer.match(responsePattern);
 
@@ -539,8 +593,8 @@ export class TUI extends Container {
 	}
 
 	/**
-	 * Resolve overlay layout from options.
-	 * Returns { width, row, col, maxHeight } for rendering.
+	 * 根据选项解析叠加层的布局。
+	 * 返回 { width, row, col, maxHeight } 用于渲染。
 	 */
 	private resolveOverlayLayout(
 		options: OverlayOptions | undefined,
@@ -676,7 +730,7 @@ export class TUI extends Container {
 		}
 	}
 
-	/** Composite all overlays into content lines (in stack order, later = on top). */
+	/** 将所有叠加层合成到内容行中（按堆栈顺序，后入的在上层） */
 	private compositeOverlays(lines: string[], termWidth: number, termHeight: number): string[] {
 		if (this.overlayStack.length === 0) return lines;
 		const result = [...lines];
@@ -766,7 +820,7 @@ export class TUI extends Container {
 		return lines;
 	}
 
-	/** Splice overlay content into a base line at a specific column. Single-pass optimized. */
+	/** 在指定列位置将叠加层内容拼接到基础行中（单次遍历优化） */
 	private compositeLineAt(
 		baseLine: string,
 		overlayLine: string,
@@ -818,12 +872,12 @@ export class TUI extends Container {
 	}
 
 	/**
-	 * Find and extract cursor position from rendered lines.
-	 * Searches for CURSOR_MARKER, calculates its position, and strips it from the output.
-	 * Only scans the bottom terminal height lines (visible viewport).
-	 * @param lines - Rendered lines to search
-	 * @param height - Terminal height (visible viewport size)
-	 * @returns Cursor position { row, col } or null if no marker found
+	 * 从渲染行中查找并提取光标位置。
+	 * 搜索 CURSOR_MARKER，计算其位置，并从输出中移除标记。
+	 * 仅扫描底部终端高度的行（可见视口）。
+	 * @param lines - 要搜索的渲染行
+	 * @param height - 终端高度（可见视口大小）
+	 * @returns 光标位置 { row, col }，如果未找到标记则返回 null
 	 */
 	private extractCursorPosition(lines: string[], height: number): { row: number; col: number } | null {
 		// Only scan the bottom `height` lines (visible viewport)
@@ -845,6 +899,7 @@ export class TUI extends Container {
 		return null;
 	}
 
+	/** 执行实际的差异化渲染 - 比较新旧行，只更新变化的部分 */
 	private doRender(): void {
 		if (this.stopped) return;
 		const width = this.terminal.columns;
@@ -1147,9 +1202,9 @@ export class TUI extends Container {
 	}
 
 	/**
-	 * Position the hardware cursor for IME candidate window.
-	 * @param cursorPos The cursor position extracted from rendered output, or null
-	 * @param totalLines Total number of rendered lines
+	 * 为 IME 候选窗口定位硬件光标。
+	 * @param cursorPos 从渲染输出中提取的光标位置，或 null
+	 * @param totalLines 渲染的总行数
 	 */
 	private positionHardwareCursor(cursorPos: { row: number; col: number } | null, totalLines: number): void {
 		if (!cursorPos || totalLines <= 0) {

@@ -1,3 +1,10 @@
+/**
+ * @file ExcelArtifact.ts
+ * @description Excel 表格制品展示组件（<excel-artifact>）。
+ * 使用 xlsx 库将 Base64 编码的 Excel 文件解析为 HTML 表格预览，
+ * 支持多工作表切换。
+ */
+
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { html, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -5,6 +12,7 @@ import * as XLSX from "xlsx";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
+/** Excel 表格制品 Web Component */
 @customElement("excel-artifact")
 export class ExcelArtifact extends ArtifactElement {
 	@property({ type: String }) private _content = "";

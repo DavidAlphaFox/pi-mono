@@ -1,3 +1,10 @@
+/**
+ * @file AgentInterface.ts
+ * @description 主聊天界面组件（<agent-interface>）。
+ * 管理消息列表展示、用户输入、流式消息接收、自动滚动、
+ * 模型选择、思维级别选择、Agent 事件订阅等核心聊天功能。
+ */
+
 import { streamSimple, type ToolResultMessage, type Usage } from "@mariozechner/pi-ai";
 import { html, LitElement } from "lit";
 import { customElement, property, query } from "lit/decorators.js";
@@ -5,7 +12,7 @@ import { ModelSelector } from "../dialogs/ModelSelector.js";
 import type { MessageEditor } from "./MessageEditor.js";
 import "./MessageEditor.js";
 import "./MessageList.js";
-import "./Messages.js"; // Import for side effects to register the custom elements
+import "./Messages.js"; // 副作用导入：注册自定义元素
 import { getAppStorage } from "../storage/app-storage.js";
 import "./StreamingMessageContainer.js";
 import type { Agent, AgentEvent } from "@mariozechner/pi-agent-core";
@@ -16,9 +23,14 @@ import { createStreamFn } from "../utils/proxy-utils.js";
 import type { UserMessageWithAttachments } from "./Messages.js";
 import type { StreamingMessageContainer } from "./StreamingMessageContainer.js";
 
+/**
+ * AI 聊天主界面组件。
+ * 负责展示消息历史、处理用户输入、管理流式响应、订阅 Agent 状态变更。
+ * 支持附件、模型选择、思维级别选择等功能。
+ */
 @customElement("agent-interface")
 export class AgentInterface extends LitElement {
-	// Optional external session: when provided, this component becomes a view over the session
+	/** 可选的外部 Agent 会话：设置后本组件成为该会话的视图 */
 	@property({ attribute: false }) session?: Agent;
 	@property({ type: Boolean }) enableAttachments = true;
 	@property({ type: Boolean }) enableModelSelector = true;

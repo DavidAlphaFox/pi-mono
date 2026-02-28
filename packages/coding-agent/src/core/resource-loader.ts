@@ -1,3 +1,14 @@
+/**
+ * 资源加载器模块
+ *
+ * 职责：
+ * - 统一发现和加载扩展、技能、提示词模板、主题
+ * - 整合包管理器解析的路径和 CLI 额外路径
+ * - 处理资源去重、冲突检测和元数据跟踪
+ * - 加载项目上下文文件（AGENTS.md/CLAUDE.md）和系统提示词
+ * - 支持热重载（reload()）和运行时扩展（extendResources()）
+ */
+
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -18,12 +29,14 @@ import { SettingsManager } from "./settings-manager.js";
 import type { Skill } from "./skills.js";
 import { loadSkills } from "./skills.js";
 
+/** 扩展提供的额外资源路径 */
 export interface ResourceExtensionPaths {
 	skillPaths?: Array<{ path: string; metadata: PathMetadata }>;
 	promptPaths?: Array<{ path: string; metadata: PathMetadata }>;
 	themePaths?: Array<{ path: string; metadata: PathMetadata }>;
 }
 
+/** 资源加载器接口 - 提供所有资源的访问和重载功能 */
 export interface ResourceLoader {
 	getExtensions(): LoadExtensionsResult;
 	getSkills(): { skills: Skill[]; diagnostics: ResourceDiagnostic[] };
@@ -111,6 +124,7 @@ function loadProjectContextFiles(
 	return contextFiles;
 }
 
+/** 默认资源加载器选项 */
 export interface DefaultResourceLoaderOptions {
 	cwd?: string;
 	agentDir?: string;
@@ -147,6 +161,16 @@ export interface DefaultResourceLoaderOptions {
 	appendSystemPromptOverride?: (base: string[]) => string[];
 }
 
+/**
+ * 默认资源加载器实现
+ *
+ * 加载流程：
+ * 1. 通过包管理器解析 npm/git 包路径
+ * 2. 合并 CLI 额外路径和设置中的路径
+ * 3. 加载扩展 → 技能 → 提示词 → 主题
+ * 4. 处理冲突检测和去重
+ * 5. 加载项目上下文文件和系统提示词
+ */
 export class DefaultResourceLoader implements ResourceLoader {
 	private cwd: string;
 	private agentDir: string;

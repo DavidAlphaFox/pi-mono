@@ -1,3 +1,19 @@
+/**
+ * @file 多行编辑器组件
+ *
+ * 提供功能完整的多行文本编辑器，支持：
+ * - 自动换行（按单词边界换行）
+ * - 垂直滚动（内容超出可见区域时）
+ * - 自动补全（斜杠命令、文件路径、@ 文件引用）
+ * - 输入历史（上/下键浏览）
+ * - Kill Ring（Emacs 风格的剪切/粘贴）
+ * - 撤销操作
+ * - 括号粘贴模式（大文本粘贴）
+ * - 字符跳转（Ctrl+] 前跳 / Ctrl+Alt+] 后跳）
+ * - Kitty 键盘协议支持
+ * - 粘性列（垂直移动时保持视觉列位置）
+ */
+
 import type { AutocompleteProvider, CombinedAutocompleteProvider } from "../autocomplete.js";
 import { getEditorKeybindings } from "../keybindings.js";
 import { matchesKey } from "../keys.js";
@@ -10,23 +26,25 @@ import { SelectList, type SelectListTheme } from "./select-list.js";
 const segmenter = getSegmenter();
 
 /**
- * Represents a chunk of text for word-wrap layout.
- * Tracks both the text content and its position in the original line.
+ * 文本块，用于自动换行布局。
+ * 同时记录文本内容和在原始行中的位置。
  */
 export interface TextChunk {
+	/** 文本内容 */
 	text: string;
+	/** 在原始行中的起始索引 */
 	startIndex: number;
+	/** 在原始行中的结束索引 */
 	endIndex: number;
 }
 
 /**
- * Split a line into word-wrapped chunks.
- * Wraps at word boundaries when possible, falling back to character-level
- * wrapping for words longer than the available width.
+ * 将行按单词边界拆分为换行块。
+ * 优先在单词边界处换行，对于超长单词回退到字符级换行。
  *
- * @param line - The text line to wrap
- * @param maxWidth - Maximum visible width per chunk
- * @returns Array of chunks with text and position information
+ * @param line - 待换行的文本行
+ * @param maxWidth - 每个块的最大可见宽度
+ * @returns 包含文本和位置信息的块数组
  */
 export function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 	if (!line || maxWidth <= 0) {
@@ -91,13 +109,13 @@ export function wordWrapLine(line: string, maxWidth: number): TextChunk[] {
 	return chunks;
 }
 
-// Kitty CSI-u sequences for printable keys, including optional shifted/base codepoints.
+// Kitty CSI-u 可打印按键序列，包含可选的 shifted/base 码点
 const KITTY_CSI_U_REGEX = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/;
 const KITTY_MOD_SHIFT = 1;
 const KITTY_MOD_ALT = 2;
 const KITTY_MOD_CTRL = 4;
 
-// Decode a printable CSI-u sequence, preferring the shifted key when present.
+/** 解码 CSI-u 可打印按键序列，优先使用 shifted 键值 */
 function decodeKittyPrintable(data: string): string | undefined {
 	const match = data.match(KITTY_CSI_U_REGEX);
 	if (!match) return undefined;
@@ -129,85 +147,121 @@ function decodeKittyPrintable(data: string): string | undefined {
 	}
 }
 
+/** 编辑器状态快照（用于撤销） */
 interface EditorState {
+	/** 文本行数组 */
 	lines: string[];
+	/** 光标所在行 */
 	cursorLine: number;
+	/** 光标所在列 */
 	cursorCol: number;
 }
 
+/** 布局行（换行后的单行显示信息） */
 interface LayoutLine {
+	/** 行文本内容 */
 	text: string;
+	/** 此行是否包含光标 */
 	hasCursor: boolean;
+	/** 光标在此行中的位置 */
 	cursorPos?: number;
 }
 
+/** 编辑器主题配置 */
 export interface EditorTheme {
+	/** 边框颜色函数 */
 	borderColor: (str: string) => string;
+	/** 自动补全选择列表主题 */
 	selectList: SelectListTheme;
 }
 
+/** 编辑器选项 */
 export interface EditorOptions {
+	/** 水平内边距 */
 	paddingX?: number;
+	/** 自动补全下拉列表最大可见行数 */
 	autocompleteMaxVisible?: number;
 }
 
+/**
+ * 多行编辑器组件。
+ * 提供完整的文本编辑功能，包括自动换行、滚动、自动补全、
+ * 历史记录、Kill Ring、撤销和括号粘贴模式支持。
+ */
 export class Editor implements Component, Focusable {
+	/** 编辑器状态（文本行和光标位置） */
 	private state: EditorState = {
 		lines: [""],
 		cursorLine: 0,
 		cursorCol: 0,
 	};
 
-	/** Focusable interface - set by TUI when focus changes */
+	/** Focusable 接口 - TUI 在焦点变化时设置 */
 	focused: boolean = false;
 
+	/** TUI 实例引用 */
 	protected tui: TUI;
+	/** 主题配置 */
 	private theme: EditorTheme;
+	/** 水平内边距 */
 	private paddingX: number = 0;
 
-	// Store last render width for cursor navigation
+	/** 上次渲染宽度（用于光标导航计算） */
 	private lastWidth: number = 80;
 
-	// Vertical scrolling support
+	/** 垂直滚动偏移量 */
 	private scrollOffset: number = 0;
 
-	// Border color (can be changed dynamically)
+	/** 边框颜色函数（可动态修改） */
 	public borderColor: (str: string) => string;
 
-	// Autocomplete support
+	// 自动补全相关
+	/** 自动补全提供者 */
 	private autocompleteProvider?: AutocompleteProvider;
+	/** 自动补全选择列表 */
 	private autocompleteList?: SelectList;
+	/** 自动补全状态："regular"=自动触发, "force"=Tab 强制触发, null=未激活 */
 	private autocompleteState: "regular" | "force" | null = null;
+	/** 当前补全匹配前缀 */
 	private autocompletePrefix: string = "";
+	/** 补全列表最大可见行数 */
 	private autocompleteMaxVisible: number = 5;
 
-	// Paste tracking for large pastes
+	// 粘贴跟踪（大文本粘贴会生成标记）
+	/** 粘贴内容映射（ID → 实际内容） */
 	private pastes: Map<number, string> = new Map();
+	/** 粘贴计数器 */
 	private pasteCounter: number = 0;
 
-	// Bracketed paste mode buffering
+	// 括号粘贴模式缓冲
 	private pasteBuffer: string = "";
 	private isInPaste: boolean = false;
 
-	// Prompt history for up/down navigation
+	// 输入历史（上/下键导航）
+	/** 历史记录数组（最近的在前） */
 	private history: string[] = [];
-	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
+	/** 历史浏览索引（-1=不在浏览, 0=最近, 1=更早...） */
+	private historyIndex: number = -1;
 
-	// Kill ring for Emacs-style kill/yank operations
+	// Emacs 风格 Kill Ring
 	private killRing = new KillRing();
+	/** 上一次操作类型（用于 Kill Ring 累积和撤销合并） */
 	private lastAction: "kill" | "yank" | "type-word" | null = null;
 
-	// Character jump mode
+	/** 字符跳转模式（"forward"=前跳, "backward"=后跳, null=未激活） */
 	private jumpMode: "forward" | "backward" | null = null;
 
-	// Preferred visual column for vertical cursor movement (sticky column)
+	/** 首选视觉列位置（垂直移动时的粘性列） */
 	private preferredVisualCol: number | null = null;
 
-	// Undo support
+	// 撤销支持
 	private undoStack = new UndoStack<EditorState>();
 
+	/** 提交回调 */
 	public onSubmit?: (text: string) => void;
+	/** 文本变化回调 */
 	public onChange?: (text: string) => void;
+	/** 是否禁用提交功能 */
 	public disableSubmit: boolean = false;
 
 	constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
@@ -220,10 +274,12 @@ export class Editor implements Component, Focusable {
 		this.autocompleteMaxVisible = Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
 	}
 
+	/** 获取水平内边距 */
 	getPaddingX(): number {
 		return this.paddingX;
 	}
 
+	/** 设置水平内边距 */
 	setPaddingX(padding: number): void {
 		const newPadding = Number.isFinite(padding) ? Math.max(0, Math.floor(padding)) : 0;
 		if (this.paddingX !== newPadding) {
@@ -232,10 +288,12 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
+	/** 获取自动补全最大可见行数 */
 	getAutocompleteMaxVisible(): number {
 		return this.autocompleteMaxVisible;
 	}
 
+	/** 设置自动补全最大可见行数 */
 	setAutocompleteMaxVisible(maxVisible: number): void {
 		const newMaxVisible = Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
 		if (this.autocompleteMaxVisible !== newMaxVisible) {
@@ -244,13 +302,14 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
+	/** 设置自动补全提供者 */
 	setAutocompleteProvider(provider: AutocompleteProvider): void {
 		this.autocompleteProvider = provider;
 	}
 
 	/**
-	 * Add a prompt to history for up/down arrow navigation.
-	 * Called after successful submission.
+	 * 将文本添加到历史记录，用于上/下键导航。
+	 * 在成功提交后调用。
 	 */
 	addToHistory(text: string): void {
 		const trimmed = text.trim();
@@ -264,22 +323,26 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
+	/** 检查编辑器是否为空 */
 	private isEditorEmpty(): boolean {
 		return this.state.lines.length === 1 && this.state.lines[0] === "";
 	}
 
+	/** 检查光标是否在第一个视觉行 */
 	private isOnFirstVisualLine(): boolean {
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);
 		return currentVisualLine === 0;
 	}
 
+	/** 检查光标是否在最后一个视觉行 */
 	private isOnLastVisualLine(): boolean {
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);
 		return currentVisualLine === visualLines.length - 1;
 	}
 
+	/** 导航历史记录（-1=向上翻旧, 1=向下翻新） */
 	private navigateHistory(direction: 1 | -1): void {
 		this.lastAction = null;
 		if (this.history.length === 0) return;
@@ -302,7 +365,7 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
-	/** Internal setText that doesn't reset history state - used by navigateHistory */
+	/** 内部 setText（不重置历史状态 - 由 navigateHistory 使用） */
 	private setTextInternal(text: string): void {
 		const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
 		this.state.lines = lines.length === 0 ? [""] : lines;
@@ -320,6 +383,7 @@ export class Editor implements Component, Focusable {
 		// No cached state to invalidate currently
 	}
 
+	/** 渲染编辑器，返回包含边框、内容和自动补全列表的行数组 */
 	render(width: number): string[] {
 		const maxPadding = Math.max(0, Math.floor((width - 1) / 2));
 		const paddingX = Math.min(this.paddingX, maxPadding);
@@ -441,6 +505,7 @@ export class Editor implements Component, Focusable {
 		return result;
 	}
 
+	/** 处理键盘输入（按键、粘贴等） */
 	handleInput(data: string): void {
 		const kb = getEditorKeybindings();
 
@@ -729,6 +794,7 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
+	/** 将文本布局为视觉行（处理换行和光标定位） */
 	private layoutText(contentWidth: number): LayoutLine[] {
 		const layoutLines: LayoutLine[] = [];
 
@@ -817,13 +883,14 @@ export class Editor implements Component, Focusable {
 		return layoutLines;
 	}
 
+	/** 获取当前文本内容 */
 	getText(): string {
 		return this.state.lines.join("\n");
 	}
 
 	/**
-	 * Get text with paste markers expanded to their actual content.
-	 * Use this when you need the full content (e.g., for external editor).
+	 * 获取展开粘贴标记后的文本。
+	 * 当需要完整内容时使用（如外部编辑器）。
 	 */
 	getExpandedText(): string {
 		let result = this.state.lines.join("\n");
@@ -834,14 +901,17 @@ export class Editor implements Component, Focusable {
 		return result;
 	}
 
+	/** 获取文本行的副本 */
 	getLines(): string[] {
 		return [...this.state.lines];
 	}
 
+	/** 获取当前光标位置 */
 	getCursor(): { line: number; col: number } {
 		return { line: this.state.cursorLine, col: this.state.cursorCol };
 	}
 
+	/** 设置文本内容（支持撤销） */
 	setText(text: string): void {
 		this.lastAction = null;
 		this.historyIndex = -1; // Exit history browsing mode
@@ -853,9 +923,9 @@ export class Editor implements Component, Focusable {
 	}
 
 	/**
-	 * Insert text at the current cursor position.
-	 * Used for programmatic insertion (e.g., clipboard image markers).
-	 * This is atomic for undo - single undo restores entire pre-insert state.
+	 * 在当前光标位置插入文本。
+	 * 用于程序化插入（如剪贴板图像标记）。
+	 * 对撤销来说是原子操作 - 单次撤销恢复整个插入前状态。
 	 */
 	insertTextAtCursor(text: string): void {
 		if (!text) return;
@@ -866,9 +936,9 @@ export class Editor implements Component, Focusable {
 	}
 
 	/**
-	 * Internal text insertion at cursor. Handles single and multi-line text.
-	 * Does not push undo snapshots or trigger autocomplete - caller is responsible.
-	 * Normalizes line endings and calls onChange once at the end.
+	 * 内部光标位置文本插入。处理单行和多行文本。
+	 * 不推送撤销快照也不触发自动补全 - 由调用者负责。
+	 * 规范化换行符并在最后调用一次 onChange。
 	 */
 	private insertTextAtCursorInternal(text: string): void {
 		if (!text) return;

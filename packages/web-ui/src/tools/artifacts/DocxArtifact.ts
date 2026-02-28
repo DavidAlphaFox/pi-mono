@@ -1,3 +1,9 @@
+/**
+ * @file DocxArtifact.ts
+ * @description DOCX 文档制品展示组件（<docx-artifact>）。
+ * 使用 docx-preview 库将 Base64 编码的 DOCX 文件渲染为 HTML 预览。
+ */
+
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { renderAsync } from "docx-preview";
 import { html, type TemplateResult } from "lit";
@@ -5,6 +11,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
+/** DOCX 文档制品 Web Component */
 @customElement("docx-artifact")
 export class DocxArtifact extends ArtifactElement {
 	@property({ type: String }) private _content = "";

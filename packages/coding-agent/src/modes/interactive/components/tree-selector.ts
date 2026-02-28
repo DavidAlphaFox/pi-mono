@@ -1,3 +1,11 @@
+/**
+ * 会话树选择器组件。
+ *
+ * 该文件提供会话树形结构的可视化和导航功能，
+ * 支持 ASCII 树形连接线、多种过滤模式、标签编辑、
+ * 搜索和选择操作，用于会话历史浏览和分支导航。
+ */
+
 import {
 	type Component,
 	Container,
@@ -15,13 +23,13 @@ import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
 
-/** Gutter info: position (displayIndent where connector was) and whether to show │ */
+/** 沟线信息：位置（显示连接符的缩进级别）和是否显示 │ */
 interface GutterInfo {
-	position: number; // displayIndent level where the connector was shown
-	show: boolean; // true = show │, false = show spaces
+	position: number; // 显示连接符的缩进级别
+	show: boolean; // true = 显示 │，false = 显示空格
 }
 
-/** Flattened tree node for navigation */
+/** 扁平化的树节点，用于导航 */
 interface FlatNode {
 	node: SessionTreeNode;
 	/** Indentation level (each level = 3 chars) */
@@ -971,7 +979,8 @@ class LabelInput implements Component, Focusable {
 }
 
 /**
- * Component that renders a session tree selector for navigation
+ * 会话树选择器组件。
+ * 以树形结构可视化会话历史，支持导航、搜索和标签编辑。
  */
 export class TreeSelectorComponent extends Container implements Focusable {
 	private treeList: TreeList;

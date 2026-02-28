@@ -1,3 +1,14 @@
+/**
+ * @file tools/read.ts - 文件读取工具
+ *
+ * 本文件负责：
+ * 1. 定义 read 工具的参数 schema（label、path、offset、limit）
+ * 2. 支持读取文本文件和图片文件
+ * 3. 图片文件以 base64 编码返回，直接传给 LLM 进行视觉理解
+ * 4. 文本文件支持行偏移（offset）和行数限制（limit）
+ * 5. 对文本内容进行头部截断处理（超过 2000 行或 50KB 时截断）
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
@@ -6,7 +17,7 @@ import type { Executor } from "../sandbox.js";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateHead } from "./truncate.js";
 
 /**
- * Map of file extensions to MIME types for common image formats
+ * 文件扩展名到 MIME 类型的映射（常见图片格式）
  */
 const IMAGE_MIME_TYPES: Record<string, string> = {
 	".jpg": "image/jpeg",
@@ -17,13 +28,16 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 };
 
 /**
- * Check if a file is an image based on its extension
+ * 判断文件是否为图片，返回对应的 MIME 类型
+ * @param filePath - 文件路径
+ * @returns MIME 类型字符串，非图片返回 null
  */
 function isImageFile(filePath: string): string | null {
 	const ext = extname(filePath).toLowerCase();
 	return IMAGE_MIME_TYPES[ext] || null;
 }
 
+/** read 工具的参数 schema 定义 */
 const readSchema = Type.Object({
 	label: Type.String({ description: "Brief description of what you're reading and why (shown to user)" }),
 	path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
@@ -31,10 +45,22 @@ const readSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
 });
 
+/**
+ * read 工具的详细信息
+ */
 interface ReadToolDetails {
+	/** 截断信息 */
 	truncation?: TruncationResult;
 }
 
+/**
+ * 创建 read 工具
+ * 读取文件内容，支持文本和图片格式。
+ * 文本文件支持行偏移和行数限制，超长内容自动截断。
+ *
+ * @param executor - 命令执行器（Host 或 Docker）
+ * @returns AgentTool 实例
+ */
 export function createReadTool(executor: Executor): AgentTool<typeof readSchema> {
 	return {
 		name: "read",
@@ -49,12 +75,13 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 			const mimeType = isImageFile(path);
 
 			if (mimeType) {
-				// Read as image (binary) - use base64
+				// 图片文件：读取为 base64 编码
 				const result = await executor.exec(`base64 < ${shellEscape(path)}`, { signal });
 				if (result.code !== 0) {
 					throw new Error(result.stderr || `Failed to read file: ${path}`);
 				}
-				const base64 = result.stdout.replace(/\s/g, ""); // Remove whitespace from base64
+				// 移除 base64 输出中的空白字符
+				const base64 = result.stdout.replace(/\s/g, "");
 
 				return {
 					content: [
@@ -65,23 +92,24 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 				};
 			}
 
-			// Get total line count first
+			// 文本文件：先获取总行数
 			const countResult = await executor.exec(`wc -l < ${shellEscape(path)}`, { signal });
 			if (countResult.code !== 0) {
 				throw new Error(countResult.stderr || `Failed to read file: ${path}`);
 			}
-			const totalFileLines = Number.parseInt(countResult.stdout.trim(), 10) + 1; // wc -l counts newlines, not lines
+			// wc -l 计算换行符数量，实际行数需要 +1
+			const totalFileLines = Number.parseInt(countResult.stdout.trim(), 10) + 1;
 
-			// Apply offset if specified (1-indexed)
+			// 应用行偏移（1 索引）
 			const startLine = offset ? Math.max(1, offset) : 1;
 			const startLineDisplay = startLine;
 
-			// Check if offset is out of bounds
+			// 检查偏移是否超出文件范围
 			if (startLine > totalFileLines) {
 				throw new Error(`Offset ${offset} is beyond end of file (${totalFileLines} lines total)`);
 			}
 
-			// Read content with offset
+			// 带偏移读取文件内容
 			let cmd: string;
 			if (startLine === 1) {
 				cmd = `cat ${shellEscape(path)}`;
@@ -97,7 +125,7 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 			let selectedContent = result.stdout;
 			let userLimitedLines: number | undefined;
 
-			// Apply user limit if specified
+			// 应用用户指定的行数限制
 			if (limit !== undefined) {
 				const lines = selectedContent.split("\n");
 				const endLine = Math.min(limit, lines.length);
@@ -105,19 +133,19 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 				userLimitedLines = endLine;
 			}
 
-			// Apply truncation (respects both line and byte limits)
+			// 应用截断（同时受行数和字节数限制）
 			const truncation = truncateHead(selectedContent);
 
 			let outputText: string;
 			let details: ReadToolDetails | undefined;
 
 			if (truncation.firstLineExceedsLimit) {
-				// First line at offset exceeds 50KB - tell model to use bash
+				// 第一行就超过 50KB - 提示使用 bash 工具
 				const firstLineSize = formatSize(Buffer.byteLength(selectedContent.split("\n")[0], "utf-8"));
 				outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
 				details = { truncation };
 			} else if (truncation.truncated) {
-				// Truncation occurred - build actionable notice
+				// 发生截断 - 构建可操作的提示信息
 				const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
 				const nextOffset = endLineDisplay + 1;
 
@@ -130,7 +158,7 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 				}
 				details = { truncation };
 			} else if (userLimitedLines !== undefined) {
-				// User specified limit, check if there's more content
+				// 用户指定了限制，检查是否还有更多内容
 				const linesFromStart = startLine - 1 + userLimitedLines;
 				if (linesFromStart < totalFileLines) {
 					const remaining = totalFileLines - linesFromStart;
@@ -142,7 +170,7 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 					outputText = truncation.content;
 				}
 			} else {
-				// No truncation, no user limit exceeded
+				// 无截断，无用户限制
 				outputText = truncation.content;
 			}
 
@@ -154,6 +182,11 @@ export function createReadTool(executor: Executor): AgentTool<typeof readSchema>
 	};
 }
 
+/**
+ * Shell 参数转义
+ * @param s - 要转义的字符串
+ * @returns 转义后的字符串
+ */
 function shellEscape(s: string): string {
 	return `'${s.replace(/'/g, "'\\''")}'`;
 }

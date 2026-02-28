@@ -1,3 +1,14 @@
+/**
+ * 目录列表工具（Ls）
+ *
+ * 本文件实现了列出目录内容的工具，功能包括：
+ * 1. 列出指定目录下的文件和子目录，按字母排序
+ * 2. 目录名带 "/" 后缀标识，包含隐藏文件（dotfiles）
+ * 3. 支持条目数量限制（默认 500 条）
+ * 4. 输出截断：总输出限制为 50KB
+ * 5. 可插拔的操作接口（LsOperations），支持远程文件系统
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { existsSync, readdirSync, statSync } from "fs";
@@ -10,25 +21,30 @@ const lsSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)" })),
 });
 
+/** Ls 工具的输入参数类型 */
 export type LsToolInput = Static<typeof lsSchema>;
 
+/** 默认条目数量上限 */
 const DEFAULT_LIMIT = 500;
 
+/** Ls 工具的详细信息 */
 export interface LsToolDetails {
+	/** 输出截断结果（如果发生了截断） */
 	truncation?: TruncationResult;
+	/** 达到条目上限时的限制值 */
 	entryLimitReached?: number;
 }
 
 /**
- * Pluggable operations for the ls tool.
- * Override these to delegate directory listing to remote systems (e.g., SSH).
+ * Ls 工具的可插拔操作接口。
+ * 可通过覆写此接口将目录列表委托给远程系统（如 SSH）。
  */
 export interface LsOperations {
-	/** Check if path exists */
+	/** 检查路径是否存在 */
 	exists: (absolutePath: string) => Promise<boolean> | boolean;
-	/** Get file/directory stats. Throws if not found. */
+	/** 获取文件/目录的状态信息，不存在时抛出异常 */
 	stat: (absolutePath: string) => Promise<{ isDirectory: () => boolean }> | { isDirectory: () => boolean };
-	/** Read directory entries */
+	/** 读取目录中的条目列表 */
 	readdir: (absolutePath: string) => Promise<string[]> | string[];
 }
 
@@ -38,11 +54,16 @@ const defaultLsOperations: LsOperations = {
 	readdir: readdirSync,
 };
 
+/** Ls 工具的配置选项 */
 export interface LsToolOptions {
-	/** Custom operations for directory listing. Default: local filesystem */
+	/** 自定义目录列表操作，默认使用本地文件系统 */
 	operations?: LsOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的目录列表工具实例。
+ * 列出目录内容并标识子目录。
+ */
 export function createLsTool(cwd: string, options?: LsToolOptions): AgentTool<typeof lsSchema> {
 	const ops = options?.operations ?? defaultLsOperations;
 
@@ -166,5 +187,5 @@ export function createLsTool(cwd: string, options?: LsToolOptions): AgentTool<ty
 	};
 }
 
-/** Default ls tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认 Ls 工具实例，保持向后兼容 */
 export const lsTool = createLsTool(process.cwd());

@@ -1,7 +1,13 @@
 /**
- * Extension loader - loads TypeScript extension modules using jiti.
+ * 扩展加载器 - 使用 jiti 加载 TypeScript 扩展模块
  *
- * Uses @mariozechner/jiti fork with virtualModules support for compiled Bun binaries.
+ * 本文件负责扩展的发现、加载和初始化，主要功能包括：
+ * 1. 使用 @mariozechner/jiti（支持 virtualModules 的 fork）加载 TypeScript 扩展
+ * 2. 在 Bun 编译二进制中使用 virtualModules，在 Node.js 中使用 alias 解析依赖
+ * 3. 创建 ExtensionRuntime（带占位的操作方法，由 Runner.bindCore() 后替换为真实实现）
+ * 4. 创建 ExtensionAPI（注册方法写入扩展对象，操作方法委托给共享 runtime）
+ * 5. 从标准位置发现扩展：项目本地（.pi/extensions/）、全局（agentDir/extensions/）、显式配置路径
+ * 6. 支持 package.json 中的 "pi" 清单字段声明扩展入口
  */
 
 import * as fs from "node:fs";
@@ -37,7 +43,7 @@ import type {
 	ToolDefinition,
 } from "./types.js";
 
-/** Modules available to extensions via virtualModules (for compiled Bun binary) */
+/** 通过 virtualModules 对扩展可用的模块（用于编译的 Bun 二进制） */
 const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
 	"@mariozechner/pi-agent-core": _bundledPiAgentCore,
@@ -49,8 +55,8 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 const require = createRequire(import.meta.url);
 
 /**
- * Get aliases for jiti (used in Node.js/development mode).
- * In Bun binary mode, virtualModules is used instead.
+ * 获取 jiti 的别名配置（在 Node.js/开发模式下使用）。
+ * 在 Bun 二进制模式下使用 virtualModules 替代。
  */
 let _aliases: Record<string, string> | null = null;
 function getAliases(): Record<string, string> {
@@ -101,8 +107,8 @@ function resolvePath(extPath: string, cwd: string): string {
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 /**
- * Create a runtime with throwing stubs for action methods.
- * Runner.bindCore() replaces these with real implementations.
+ * 创建带抛异常占位方法的扩展运行时。
+ * Runner.bindCore() 会将这些占位方法替换为真实实现。
  */
 export function createExtensionRuntime(): ExtensionRuntime {
 	const notInitialized = () => {
@@ -139,9 +145,8 @@ export function createExtensionRuntime(): ExtensionRuntime {
 }
 
 /**
- * Create the ExtensionAPI for an extension.
- * Registration methods write to the extension object.
- * Action methods delegate to the shared runtime.
+ * 为扩展创建 ExtensionAPI。
+ * 注册方法将数据写入扩展对象，操作方法委托给共享的 runtime。
  */
 function createExtensionAPI(
 	extension: Extension,
@@ -269,6 +274,7 @@ function createExtensionAPI(
 	return api;
 }
 
+/** 使用 jiti 加载扩展模块，返回工厂函数（如果有效） */
 async function loadExtensionModule(extensionPath: string) {
 	const jiti = createJiti(import.meta.url, {
 		moduleCache: false,
@@ -284,7 +290,7 @@ async function loadExtensionModule(extensionPath: string) {
 }
 
 /**
- * Create an Extension object with empty collections.
+ * 创建一个带空集合的 Extension 对象。
  */
 function createExtension(extensionPath: string, resolvedPath: string): Extension {
 	return {
@@ -299,6 +305,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 	};
 }
 
+/** 加载单个扩展：解析路径、加载模块、创建扩展对象并调用工厂函数 */
 async function loadExtension(
 	extensionPath: string,
 	cwd: string,
@@ -325,7 +332,7 @@ async function loadExtension(
 }
 
 /**
- * Create an Extension from an inline factory function.
+ * 从内联工厂函数创建扩展（用于编程式注册）。
  */
 export async function loadExtensionFromFactory(
 	factory: ExtensionFactory,
@@ -341,7 +348,7 @@ export async function loadExtensionFromFactory(
 }
 
 /**
- * Load extensions from paths.
+ * 从路径列表加载扩展。
  */
 export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
@@ -369,6 +376,7 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 	};
 }
 
+/** package.json 中 "pi" 字段的清单结构 */
 interface PiManifest {
 	extensions?: string[];
 	themes?: string[];
@@ -376,6 +384,7 @@ interface PiManifest {
 	prompts?: string[];
 }
 
+/** 读取 package.json 中的 "pi" 清单字段 */
 function readPiManifest(packageJsonPath: string): PiManifest | null {
 	try {
 		const content = fs.readFileSync(packageJsonPath, "utf-8");
@@ -389,18 +398,19 @@ function readPiManifest(packageJsonPath: string): PiManifest | null {
 	}
 }
 
+/** 检查文件名是否为扩展文件（.ts 或 .js） */
 function isExtensionFile(name: string): boolean {
 	return name.endsWith(".ts") || name.endsWith(".js");
 }
 
 /**
- * Resolve extension entry points from a directory.
+ * 从目录中解析扩展入口点。
  *
- * Checks for:
- * 1. package.json with "pi.extensions" field -> returns declared paths
- * 2. index.ts or index.js -> returns the index file
+ * 检查顺序：
+ * 1. package.json 中有 "pi.extensions" 字段 -> 返回声明的路径
+ * 2. 存在 index.ts 或 index.js -> 返回索引文件
  *
- * Returns resolved paths or null if no entry points found.
+ * 未找到入口点时返回 null。
  */
 function resolveExtensionEntries(dir: string): string[] | null {
 	// Check for package.json with "pi" field first
@@ -435,14 +445,14 @@ function resolveExtensionEntries(dir: string): string[] | null {
 }
 
 /**
- * Discover extensions in a directory.
+ * 在目录中发现扩展。
  *
- * Discovery rules:
- * 1. Direct files: `extensions/*.ts` or `*.js` → load
- * 2. Subdirectory with index: `extensions/* /index.ts` or `index.js` → load
- * 3. Subdirectory with package.json: `extensions/* /package.json` with "pi" field → load what it declares
+ * 发现规则：
+ * 1. 直接文件：extensions/*.ts 或 *.js -> 加载
+ * 2. 带索引的子目录：extensions/子目录/index.ts 或 index.js -> 加载
+ * 3. 带 package.json 的子目录：extensions/子目录/package.json 有 "pi" 字段 -> 加载其声明的内容
  *
- * No recursion beyond one level. Complex packages must use package.json manifest.
+ * 不递归超过一层。复杂的包必须使用 package.json 清单。
  */
 function discoverExtensionsInDir(dir: string): string[] {
 	if (!fs.existsSync(dir)) {
@@ -479,7 +489,8 @@ function discoverExtensionsInDir(dir: string): string[] {
 }
 
 /**
- * Discover and load extensions from standard locations.
+ * 从标准位置发现并加载扩展。
+ * 搜索顺序：项目本地（cwd/.pi/extensions/）、全局（agentDir/extensions/）、显式配置路径。
  */
 export async function discoverAndLoadExtensions(
 	configuredPaths: string[],

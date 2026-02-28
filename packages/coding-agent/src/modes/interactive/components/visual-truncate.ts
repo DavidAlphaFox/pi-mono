@@ -1,28 +1,34 @@
 /**
- * Shared utility for truncating text to visual lines (accounting for line wrapping).
- * Used by both tool-execution.ts and bash-execution.ts for consistent behavior.
+ * 可视行截断工具。
+ *
+ * 该文件提供将文本截断为指定可视行数的功能，
+ * 考虑了终端宽度导致的自动换行。
+ * 被 tool-execution.ts 和 bash-execution.ts 共同使用，以保持一致的截断行为。
  */
 
 import { Text } from "@mariozechner/pi-tui";
 
+/**
+ * 可视行截断结果接口。
+ */
 export interface VisualTruncateResult {
-	/** The visual lines to display */
+	/** 要显示的可视行数组 */
 	visualLines: string[];
-	/** Number of visual lines that were skipped (hidden) */
+	/** 被跳过（隐藏）的可视行数 */
 	skippedCount: number;
 }
 
 /**
- * Truncate text to a maximum number of visual lines (from the end).
- * This accounts for line wrapping based on terminal width.
+ * 将文本截断为最大可视行数（从末尾保留）。
+ * 该函数考虑了终端宽度导致的自动换行，计算的是实际显示行数而非逻辑行数。
  *
- * @param text - The text content (may contain newlines)
- * @param maxVisualLines - Maximum number of visual lines to show
- * @param width - Terminal/render width
- * @param paddingX - Horizontal padding for Text component (default 0).
- *                   Use 0 when result will be placed in a Box (Box adds its own padding).
- *                   Use 1 when result will be placed in a plain Container.
- * @returns The truncated visual lines and count of skipped lines
+ * @param text - 文本内容（可能包含换行符）
+ * @param maxVisualLines - 最大显示的可视行数
+ * @param width - 终端/渲染宽度
+ * @param paddingX - Text 组件的水平内边距（默认 0）。
+ *                   在 Box 内使用时设为 0（Box 自带内边距），
+ *                   在普通 Container 内使用时设为 1。
+ * @returns 截断后的可视行和被跳过的行数
  */
 export function truncateToVisualLines(
 	text: string,

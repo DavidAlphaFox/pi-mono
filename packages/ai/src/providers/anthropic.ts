@@ -1,3 +1,15 @@
+/**
+ * @file Anthropic Messages API 提供商
+ *
+ * 本文件实现了 Anthropic Claude 系列模型的流式调用，支持：
+ * - 标准文本生成和工具调用
+ * - 扩展思考（Extended Thinking）：预算制（旧模型）和自适应（Opus 4.6/Sonnet 4.6）
+ * - OAuth 令牌认证（模拟 Claude Code 身份）和 API 密钥认证
+ * - GitHub Copilot 代理（Bearer 认证，选择性 beta 头）
+ * - 提示缓存（短期/长期）和 Unicode 代理对清理
+ * - 跨提供商消息转换（工具调用 ID 规范化、思考块处理）
+ */
+
 import Anthropic from "@anthropic-ai/sdk";
 import type {
 	ContentBlockParam,
@@ -190,6 +202,7 @@ function mergeHeaders(...headerSources: (Record<string, string> | undefined)[]):
 	return merged;
 }
 
+/** Anthropic Messages API 的底层流式调用函数 */
 export const streamAnthropic: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 	model: Model<"anthropic-messages">,
 	context: Context,
@@ -454,6 +467,7 @@ function mapThinkingLevelToEffort(level: SimpleStreamOptions["reasoning"], model
 	}
 }
 
+/** Anthropic Messages API 的简化版流式调用函数，自动根据推理级别配置思考参数 */
 export const streamSimpleAnthropic: StreamFunction<"anthropic-messages", SimpleStreamOptions> = (
 	model: Model<"anthropic-messages">,
 	context: Context,

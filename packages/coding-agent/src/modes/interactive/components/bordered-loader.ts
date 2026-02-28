@@ -1,9 +1,19 @@
+/**
+ * 带边框的加载动画组件。
+ *
+ * 该文件提供用于扩展 UI 的加载指示器，带有上下边框装饰，
+ * 支持可取消和不可取消两种模式。
+ */
+
 import { CancellableLoader, Container, Loader, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
 import type { Theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
 
-/** Loader wrapped with borders for extension UI */
+/**
+ * 带边框的加载器组件。
+ * 在加载动画上下方添加动态边框，可选择性支持用户取消操作。
+ */
 export class BorderedLoader extends Container {
 	private loader: CancellableLoader | Loader;
 	private cancellable: boolean;

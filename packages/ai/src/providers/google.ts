@@ -1,3 +1,14 @@
+/**
+ * @file Google Generative AI（Gemini API）提供商
+ *
+ * 本文件实现了 Google Gemini 系列模型的流式调用，支持：
+ * - Gemini 2.x 系列：基于 budgetTokens 的思考预算控制
+ * - Gemini 3 系列（Pro/Flash）：基于 thinkingLevel 的思考级别控制
+ * - 思考签名（Thought Signature）的流式保留与跨轮次传递
+ * - 工具调用（Function Calling）及唯一 ID 生成
+ * - 流式文本/思考内容块的自动切换与事件推送
+ */
+
 import {
 	type GenerateContentConfig,
 	type GenerateContentParameters,
@@ -33,6 +44,7 @@ import {
 } from "./google-shared.js";
 import { buildBaseOptions, clampReasoning } from "./simple-options.js";
 
+/** Google Generative AI 流式调用选项 */
 export interface GoogleOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "any";
 	thinking?: {
@@ -45,6 +57,7 @@ export interface GoogleOptions extends StreamOptions {
 // Counter for generating unique tool call IDs
 let toolCallCounter = 0;
 
+/** Google Generative AI 的底层流式调用函数 */
 export const streamGoogle: StreamFunction<"google-generative-ai", GoogleOptions> = (
 	model: Model<"google-generative-ai">,
 	context: Context,
@@ -268,6 +281,7 @@ export const streamGoogle: StreamFunction<"google-generative-ai", GoogleOptions>
 	return stream;
 };
 
+/** Google Generative AI 的简化版流式调用函数，自动根据模型系列选择思考配置 */
 export const streamSimpleGoogle: StreamFunction<"google-generative-ai", SimpleStreamOptions> = (
 	model: Model<"google-generative-ai">,
 	context: Context,

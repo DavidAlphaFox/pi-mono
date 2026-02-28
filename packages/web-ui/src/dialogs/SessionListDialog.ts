@@ -1,3 +1,10 @@
+/**
+ * @file SessionListDialog.ts
+ * @description 会话列表对话框（<session-list-dialog>）。
+ * 展示所有保存的聊天会话，支持加载和删除会话，
+ * 显示会话标题、时间戳和用量统计信息。
+ */
+
 import { DialogContent, DialogHeader } from "@mariozechner/mini-lit/dist/Dialog.js";
 import { DialogBase } from "@mariozechner/mini-lit/dist/DialogBase.js";
 import { html } from "lit";
@@ -7,6 +14,10 @@ import type { SessionMetadata } from "../storage/types.js";
 import { formatUsage } from "../utils/format.js";
 import { i18n } from "../utils/i18n.js";
 
+/**
+ * 会话列表对话框 Web Component。
+ * 从存储加载会话元数据列表，按时间倒序展示，支持选择和删除操作。
+ */
 @customElement("session-list-dialog")
 export class SessionListDialog extends DialogBase {
 	@state() private sessions: SessionMetadata[] = [];

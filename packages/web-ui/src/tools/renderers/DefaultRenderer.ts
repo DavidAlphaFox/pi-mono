@@ -1,3 +1,9 @@
+/**
+ * @file DefaultRenderer.ts
+ * @description 默认工具渲染器。
+ * 以 JSON 格式展示工具参数和执行结果，用于没有专用渲染器的工具。
+ */
+
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { html } from "lit";
 import { Code } from "lucide";
@@ -5,6 +11,7 @@ import { i18n } from "../../utils/i18n.js";
 import { renderHeader } from "../renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "../types.js";
 
+/** 默认 JSON 渲染器，将工具参数和结果以格式化 JSON 展示 */
 export class DefaultRenderer implements ToolRenderer {
 	render(params: any | undefined, result: ToolResultMessage | undefined, isStreaming?: boolean): ToolRenderResult {
 		const state = result ? (result.isError ? "error" : "complete") : isStreaming ? "inprogress" : "complete";

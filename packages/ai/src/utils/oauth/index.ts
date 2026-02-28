@@ -1,12 +1,17 @@
 /**
- * OAuth credential management for AI providers.
+ * @file OAuth 凭据管理入口
  *
- * This module handles login, token refresh, and credential storage
- * for OAuth-based providers:
- * - Anthropic (Claude Pro/Max)
- * - GitHub Copilot
- * - Google Cloud Code Assist (Gemini CLI)
- * - Antigravity (Gemini 3, Claude, GPT-OSS via Google Cloud)
+ * 本文件是 OAuth 认证模块的主入口，负责：
+ * - 提供商注册表管理（注册、注销、查询 OAuth 提供商）
+ * - 统一的登录、令牌刷新接口
+ * - 自动检测过期令牌并刷新
+ *
+ * 支持的 OAuth 提供商：
+ * - Anthropic（Claude Pro/Max）
+ * - GitHub Copilot（设备码流程）
+ * - Google Cloud Code Assist / Gemini CLI
+ * - Antigravity（Gemini 3、Claude、GPT-OSS via Google Cloud）
+ * - OpenAI Codex（ChatGPT 订阅）
  */
 
 // Set up HTTP proxy for fetch() calls (respects HTTP_PROXY, HTTPS_PROXY env vars)
@@ -42,6 +47,7 @@ import { geminiCliOAuthProvider } from "./google-gemini-cli.js";
 import { openaiCodexOAuthProvider } from "./openai-codex.js";
 import type { OAuthCredentials, OAuthProviderId, OAuthProviderInfo, OAuthProviderInterface } from "./types.js";
 
+/** 内置 OAuth 提供商列表 */
 const BUILT_IN_OAUTH_PROVIDERS: OAuthProviderInterface[] = [
 	anthropicOAuthProvider,
 	githubCopilotOAuthProvider,
@@ -50,30 +56,22 @@ const BUILT_IN_OAUTH_PROVIDERS: OAuthProviderInterface[] = [
 	openaiCodexOAuthProvider,
 ];
 
+/** OAuth 提供商注册表，以提供商 ID 为键 */
 const oauthProviderRegistry = new Map<string, OAuthProviderInterface>(
 	BUILT_IN_OAUTH_PROVIDERS.map((provider) => [provider.id, provider]),
 );
 
-/**
- * Get an OAuth provider by ID
- */
+/** 根据 ID 获取 OAuth 提供商 */
 export function getOAuthProvider(id: OAuthProviderId): OAuthProviderInterface | undefined {
 	return oauthProviderRegistry.get(id);
 }
 
-/**
- * Register a custom OAuth provider
- */
+/** 注册自定义 OAuth 提供商 */
 export function registerOAuthProvider(provider: OAuthProviderInterface): void {
 	oauthProviderRegistry.set(provider.id, provider);
 }
 
-/**
- * Unregister an OAuth provider.
- *
- * If the provider is built-in, restores the built-in implementation.
- * Custom providers are removed completely.
- */
+/** 注销 OAuth 提供商。内置提供商会恢复为默认实现，自定义提供商则完全移除 */
 export function unregisterOAuthProvider(id: string): void {
 	const builtInProvider = BUILT_IN_OAUTH_PROVIDERS.find((provider) => provider.id === id);
 	if (builtInProvider) {
@@ -83,9 +81,7 @@ export function unregisterOAuthProvider(id: string): void {
 	oauthProviderRegistry.delete(id);
 }
 
-/**
- * Reset OAuth providers to built-ins.
- */
+/** 重置 OAuth 提供商注册表为内置默认状态 */
 export function resetOAuthProviders(): void {
 	oauthProviderRegistry.clear();
 	for (const provider of BUILT_IN_OAUTH_PROVIDERS) {
@@ -93,9 +89,7 @@ export function resetOAuthProviders(): void {
 	}
 }
 
-/**
- * Get all registered OAuth providers
- */
+/** 获取所有已注册的 OAuth 提供商 */
 export function getOAuthProviders(): OAuthProviderInterface[] {
 	return Array.from(oauthProviderRegistry.values());
 }
@@ -116,8 +110,8 @@ export function getOAuthProviderInfoList(): OAuthProviderInfo[] {
 // ============================================================================
 
 /**
- * Refresh token for any OAuth provider.
- * @deprecated Use getOAuthProvider(id).refreshToken() instead
+ * 刷新任意 OAuth 提供商的令牌。
+ * @deprecated 请使用 getOAuthProvider(id).refreshToken() 代替
  */
 export async function refreshOAuthToken(
 	providerId: OAuthProviderId,
@@ -131,11 +125,11 @@ export async function refreshOAuthToken(
 }
 
 /**
- * Get API key for a provider from OAuth credentials.
- * Automatically refreshes expired tokens.
+ * 从 OAuth 凭据中获取提供商的 API 密钥。
+ * 自动刷新已过期的令牌。
  *
- * @returns API key string and updated credentials, or null if no credentials
- * @throws Error if refresh fails
+ * @returns API 密钥字符串和更新后的凭据，无凭据时返回 null
+ * @throws 刷新失败时抛出错误
  */
 export async function getOAuthApiKey(
 	providerId: OAuthProviderId,

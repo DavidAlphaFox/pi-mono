@@ -1,5 +1,9 @@
 /**
- * Component for displaying bash command execution with streaming output.
+ * Bash 命令执行显示组件。
+ *
+ * 该文件提供用于显示 Bash 命令执行过程的组件，
+ * 支持流式输出、可视行截断、展开/折叠、
+ * 以及运行中/完成/取消/错误等状态显示。
  */
 
 import { Container, Loader, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
@@ -15,9 +19,14 @@ import { DynamicBorder } from "./dynamic-border.js";
 import { editorKey, keyHint } from "./keybinding-hints.js";
 import { truncateToVisualLines } from "./visual-truncate.js";
 
-// Preview line limit when not expanded (matches tool execution behavior)
+// 未展开时的预览行数限制（与工具执行行为一致）
 const PREVIEW_LINES = 20;
 
+/**
+ * Bash 命令执行组件。
+ * 显示命令名称、流式输出、退出码和截断信息，
+ * 支持展开/折叠以查看完整输出。
+ */
 export class BashExecutionComponent extends Container {
 	private command: string;
 	private outputLines: string[] = [];

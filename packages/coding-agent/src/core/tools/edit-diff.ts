@@ -1,6 +1,15 @@
 /**
- * Shared diff computation utilities for the edit tool.
- * Used by both edit.ts (for execution) and tool-execution.ts (for preview rendering).
+ * 编辑工具的差异计算工具集
+ *
+ * 本文件包含编辑工具共享的差异计算和文本处理工具函数，功能包括：
+ * 1. 换行符检测、标准化和恢复（支持 CRLF/LF）
+ * 2. 模糊匹配的文本标准化（处理尾随空白、Unicode 引号/破折号/特殊空格）
+ * 3. 精确匹配优先的模糊文本查找（fuzzyFindText）
+ * 4. UTF-8 BOM 标记的剥离和恢复
+ * 5. 带行号和上下文的 unified diff 生成
+ * 6. 编辑预览的差异计算（不实际应用修改）
+ *
+ * 被 edit.ts（执行编辑）和 tool-execution.ts（预览渲染）共同使用。
  */
 
 import * as Diff from "diff";
@@ -8,6 +17,10 @@ import { constants } from "fs";
 import { access, readFile } from "fs/promises";
 import { resolveToCwd } from "./path-utils.js";
 
+/**
+ * 检测文件内容使用的换行符类型。
+ * 如果先出现 CRLF（\r\n）则返回 "\r\n"，否则返回 "\n"。
+ */
 export function detectLineEnding(content: string): "\r\n" | "\n" {
 	const crlfIdx = content.indexOf("\r\n");
 	const lfIdx = content.indexOf("\n");
@@ -16,20 +29,22 @@ export function detectLineEnding(content: string): "\r\n" | "\n" {
 	return crlfIdx < lfIdx ? "\r\n" : "\n";
 }
 
+/** 将所有换行符标准化为 LF（\n） */
 export function normalizeToLF(text: string): string {
 	return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
+/** 将 LF 换行符恢复为指定的换行符类型 */
 export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
 	return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
 /**
- * Normalize text for fuzzy matching. Applies progressive transformations:
- * - Strip trailing whitespace from each line
- * - Normalize smart quotes to ASCII equivalents
- * - Normalize Unicode dashes/hyphens to ASCII hyphen
- * - Normalize special Unicode spaces to regular space
+ * 对文本进行模糊匹配标准化处理，依次应用以下变换：
+ * - 去除每行的尾随空白
+ * - 将 Unicode 弯引号标准化为 ASCII 引号
+ * - 将 Unicode 破折号/连字符标准化为 ASCII 连字符
+ * - 将 Unicode 特殊空格标准化为普通空格
  */
 export function normalizeForFuzzyMatch(text: string): string {
 	return (
@@ -53,27 +68,27 @@ export function normalizeForFuzzyMatch(text: string): string {
 	);
 }
 
+/** 模糊匹配结果 */
 export interface FuzzyMatchResult {
-	/** Whether a match was found */
+	/** 是否找到匹配 */
 	found: boolean;
-	/** The index where the match starts (in the content that should be used for replacement) */
+	/** 匹配起始位置的索引（在 contentForReplacement 中的位置） */
 	index: number;
-	/** Length of the matched text */
+	/** 匹配文本的长度 */
 	matchLength: number;
-	/** Whether fuzzy matching was used (false = exact match) */
+	/** 是否使用了模糊匹配（false 表示精确匹配） */
 	usedFuzzyMatch: boolean;
 	/**
-	 * The content to use for replacement operations.
-	 * When exact match: original content. When fuzzy match: normalized content.
+	 * 用于替换操作的内容。
+	 * 精确匹配时为原始内容，模糊匹配时为标准化后的内容。
 	 */
 	contentForReplacement: string;
 }
 
 /**
- * Find oldText in content, trying exact match first, then fuzzy match.
- * When fuzzy matching is used, the returned contentForReplacement is the
- * fuzzy-normalized version of the content (trailing whitespace stripped,
- * Unicode quotes/dashes normalized to ASCII).
+ * 在内容中查找旧文本，优先尝试精确匹配，失败后尝试模糊匹配。
+ * 使用模糊匹配时，返回的 contentForReplacement 是经过标准化的内容
+ * （去除尾随空白，Unicode 引号/破折号标准化为 ASCII）。
  */
 export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
 	// Try exact match first
@@ -115,14 +130,14 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 	};
 }
 
-/** Strip UTF-8 BOM if present, return both the BOM (if any) and the text without it */
+/** 剥离 UTF-8 BOM 标记（如果存在），返回 BOM 标记和去除 BOM 后的文本 */
 export function stripBom(content: string): { bom: string; text: string } {
 	return content.startsWith("\uFEFF") ? { bom: "\uFEFF", text: content.slice(1) } : { bom: "", text: content };
 }
 
 /**
- * Generate a unified diff string with line numbers and context.
- * Returns both the diff string and the first changed line number (in the new file).
+ * 生成带行号和上下文的 unified diff 字符串。
+ * 返回 diff 字符串和新文件中第一个变更的行号。
  */
 export function generateDiffString(
 	oldContent: string,
@@ -226,18 +241,23 @@ export function generateDiffString(
 	return { diff: output.join("\n"), firstChangedLine };
 }
 
+/** 编辑差异计算的成功结果 */
 export interface EditDiffResult {
+	/** unified diff 字符串 */
 	diff: string;
+	/** 新文件中第一个变更的行号 */
 	firstChangedLine: number | undefined;
 }
 
+/** 编辑差异计算的错误结果 */
 export interface EditDiffError {
+	/** 错误描述信息 */
 	error: string;
 }
 
 /**
- * Compute the diff for an edit operation without applying it.
- * Used for preview rendering in the TUI before the tool executes.
+ * 计算编辑操作的差异但不实际应用修改。
+ * 用于 TUI 在工具执行前的预览渲染。
  */
 export async function computeEditDiff(
 	path: string,

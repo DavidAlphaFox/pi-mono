@@ -1,8 +1,20 @@
+/**
+ * @file StreamingMessageContainer.ts
+ * @description 流式消息容器组件（<streaming-message-container>）。
+ * 管理正在流式接收的消息的更新显示，使用批量更新策略
+ * （requestAnimationFrame + 变更检测）优化渲染性能。
+ */
+
 import type { AgentMessage, AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { html, LitElement } from "lit";
 import { property, state } from "lit/decorators.js";
 
+/**
+ * 流式消息容器 Web Component。
+ * 接收不断更新的消息对象，通过 requestAnimationFrame 批量合并更新，
+ * 避免高频渲染导致的性能问题。
+ */
 export class StreamingMessageContainer extends LitElement {
 	@property({ type: Array }) tools: AgentTool[] = [];
 	@property({ type: Boolean }) isStreaming = false;

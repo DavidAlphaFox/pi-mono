@@ -1,11 +1,19 @@
+/**
+ * 底部状态栏组件。
+ *
+ * 该文件提供交互模式底部的状态栏渲染，
+ * 显示工作目录、Git 分支、token 统计、上下文使用率、
+ * 当前模型信息、扩展状态等信息。
+ */
+
 import { type Component, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { AgentSession } from "../../../core/agent-session.js";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.js";
 import { theme } from "../theme/theme.js";
 
 /**
- * Sanitize text for display in a single-line status.
- * Removes newlines, tabs, carriage returns, and other control characters.
+ * 净化文本用于单行状态显示。
+ * 移除换行符、制表符、回车符及其他控制字符。
  */
 function sanitizeStatusText(text: string): string {
 	// Replace newlines, tabs, carriage returns with space, then collapse multiple spaces
@@ -16,7 +24,7 @@ function sanitizeStatusText(text: string): string {
 }
 
 /**
- * Format token counts (similar to web-ui)
+ * 格式化 token 数量显示（类似 web-ui 的格式）。
  */
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -27,8 +35,9 @@ function formatTokens(count: number): string {
 }
 
 /**
- * Footer component that shows pwd, token stats, and context usage.
- * Computes token/context stats from session, gets git branch and extension statuses from provider.
+ * 底部状态栏组件。
+ * 显示工作目录、token 统计和上下文使用率。
+ * 从会话计算 token/上下文统计，从提供者获取 Git 分支和扩展状态。
  */
 export class FooterComponent implements Component {
 	private autoCompactEnabled = true;

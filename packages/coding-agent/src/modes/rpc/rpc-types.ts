@@ -1,8 +1,13 @@
 /**
- * RPC protocol types for headless operation.
+ * RPC 协议类型定义，用于无界面（headless）操作模式。
  *
- * Commands are sent as JSON lines on stdin.
- * Responses and events are emitted as JSON lines on stdout.
+ * 该文件定义了 RPC 模式下所有的通信类型：
+ * - 命令（RpcCommand）：通过 stdin 以 JSON 行发送
+ * - 响应（RpcResponse）：通过 stdout 以 JSON 行返回
+ * - 事件（RpcExtensionUIRequest/Response）：扩展 UI 交互事件
+ * - 会话状态（RpcSessionState）：当前会话的状态快照
+ *
+ * 这些类型确保了 RPC 客户端和服务端之间的类型安全通信。
  */
 
 import type { AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -12,9 +17,15 @@ import type { BashResult } from "../../core/bash-executor.js";
 import type { CompactionResult } from "../../core/compaction/index.js";
 
 // ============================================================================
-// RPC Commands (stdin)
+// RPC 命令类型（通过 stdin 发送）
 // ============================================================================
 
+/**
+ * RPC 命令联合类型。
+ * 定义了所有可通过 stdin 发送给代理的命令，
+ * 涵盖提示、状态查询、模型管理、会话操作等功能。
+ * 每个命令可携带可选的 `id` 字段用于匹配响应。
+ */
 export type RpcCommand =
 	// Prompting
 	| { id?: string; type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
@@ -67,47 +78,67 @@ export type RpcCommand =
 	| { id?: string; type: "get_commands" };
 
 // ============================================================================
-// RPC Slash Command (for get_commands response)
+// RPC 斜杠命令（用于 get_commands 响应）
 // ============================================================================
 
-/** A command available for invocation via prompt */
+/** 可通过提示词调用的命令描述 */
 export interface RpcSlashCommand {
-	/** Command name (without leading slash) */
+	/** 命令名称（不含前导斜杠） */
 	name: string;
-	/** Human-readable description */
+	/** 人类可读的命令描述 */
 	description?: string;
-	/** What kind of command this is */
+	/** 命令的来源类型 */
 	source: "extension" | "prompt" | "skill";
-	/** Where the command was loaded from (undefined for extensions) */
+	/** 命令加载的位置（扩展命令时为 undefined） */
 	location?: "user" | "project" | "path";
-	/** File path to the command source */
+	/** 命令源文件的路径 */
 	path?: string;
 }
 
 // ============================================================================
-// RPC State
+// RPC 会话状态
 // ============================================================================
 
+/**
+ * RPC 会话状态快照。
+ * 通过 get_state 命令返回，反映代理的当前运行状态。
+ */
 export interface RpcSessionState {
+	/** 当前使用的模型 */
 	model?: Model<any>;
+	/** 当前思考级别 */
 	thinkingLevel: ThinkingLevel;
+	/** 是否正在流式输出 */
 	isStreaming: boolean;
+	/** 是否正在执行上下文压缩 */
 	isCompacting: boolean;
+	/** 引导消息处理模式 */
 	steeringMode: "all" | "one-at-a-time";
+	/** 后续消息处理模式 */
 	followUpMode: "all" | "one-at-a-time";
+	/** 当前会话文件路径 */
 	sessionFile?: string;
+	/** 会话唯一标识符 */
 	sessionId: string;
+	/** 会话显示名称 */
 	sessionName?: string;
+	/** 是否启用自动压缩 */
 	autoCompactionEnabled: boolean;
+	/** 会话中的消息总数 */
 	messageCount: number;
+	/** 待处理的消息数量 */
 	pendingMessageCount: number;
 }
 
 // ============================================================================
-// RPC Responses (stdout)
+// RPC 响应类型（通过 stdout 输出）
 // ============================================================================
 
-// Success responses with data
+/**
+ * RPC 响应联合类型。
+ * 每个命令对应一种成功响应格式，失败时统一返回错误响应。
+ * 响应通过 `id` 字段与请求命令匹配。
+ */
 export type RpcResponse =
 	// Prompting (async - events follow)
 	| { id?: string; type: "response"; command: "prompt"; success: true }
@@ -205,10 +236,14 @@ export type RpcResponse =
 	| { id?: string; type: "response"; command: string; success: false; error: string };
 
 // ============================================================================
-// Extension UI Events (stdout)
+// 扩展 UI 事件（通过 stdout 输出）
 // ============================================================================
 
-/** Emitted when an extension needs user input */
+/**
+ * 扩展 UI 请求事件。
+ * 当扩展需要用户输入时发出，支持选择、确认、文本输入、编辑器、
+ * 通知、状态设置、部件设置、标题设置等交互方式。
+ */
 export type RpcExtensionUIRequest =
 	| { type: "extension_ui_request"; id: string; method: "select"; title: string; options: string[]; timeout?: number }
 	| { type: "extension_ui_request"; id: string; method: "confirm"; title: string; message: string; timeout?: number }
@@ -247,17 +282,22 @@ export type RpcExtensionUIRequest =
 	| { type: "extension_ui_request"; id: string; method: "set_editor_text"; text: string };
 
 // ============================================================================
-// Extension UI Commands (stdin)
+// 扩展 UI 命令（通过 stdin 发送）
 // ============================================================================
 
-/** Response to an extension UI request */
+/**
+ * 扩展 UI 请求的响应。
+ * 客户端收到 RpcExtensionUIRequest 后，通过此类型发送响应。
+ * 支持返回选择值、确认结果或取消操作。
+ */
 export type RpcExtensionUIResponse =
 	| { type: "extension_ui_response"; id: string; value: string }
 	| { type: "extension_ui_response"; id: string; confirmed: boolean }
 	| { type: "extension_ui_response"; id: string; cancelled: true };
 
 // ============================================================================
-// Helper type for extracting command types
+// 辅助类型：提取命令类型字符串
 // ============================================================================
 
+/** 所有 RPC 命令的 type 字段联合类型 */
 export type RpcCommandType = RpcCommand["type"];

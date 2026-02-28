@@ -1,16 +1,28 @@
+/**
+ * @file 文本组件
+ *
+ * 提供多行文本显示功能，支持自动换行、内边距和自定义背景色。
+ * 渲染结果会被缓存以避免不必要的重新计算。
+ */
+
 import type { Component } from "../tui.js";
 import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "../utils.js";
 
 /**
- * Text component - displays multi-line text with word wrapping
+ * 文本组件 - 显示多行文本，支持自动换行。
+ * 支持水平/垂直内边距和自定义背景色函数。
  */
 export class Text implements Component {
+	/** 文本内容 */
 	private text: string;
-	private paddingX: number; // Left/right padding
-	private paddingY: number; // Top/bottom padding
+	/** 左右内边距（字符数） */
+	private paddingX: number;
+	/** 上下内边距（行数） */
+	private paddingY: number;
+	/** 自定义背景色函数 */
 	private customBgFn?: (text: string) => string;
 
-	// Cache for rendered output
+	// 渲染输出缓存
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
@@ -22,6 +34,7 @@ export class Text implements Component {
 		this.customBgFn = customBgFn;
 	}
 
+	/** 设置文本内容并清除缓存 */
 	setText(text: string): void {
 		this.text = text;
 		this.cachedText = undefined;
@@ -29,6 +42,7 @@ export class Text implements Component {
 		this.cachedLines = undefined;
 	}
 
+	/** 设置自定义背景色函数并清除缓存 */
 	setCustomBgFn(customBgFn?: (text: string) => string): void {
 		this.customBgFn = customBgFn;
 		this.cachedText = undefined;
@@ -36,12 +50,14 @@ export class Text implements Component {
 		this.cachedLines = undefined;
 	}
 
+	/** 使缓存失效，强制下次渲染时重新计算 */
 	invalidate(): void {
 		this.cachedText = undefined;
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
 	}
 
+	/** 渲染文本组件，返回填充至指定宽度的行数组 */
 	render(width: number): string[] {
 		// Check cache
 		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {

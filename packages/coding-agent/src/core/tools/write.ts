@@ -1,3 +1,13 @@
+/**
+ * 文件写入工具
+ *
+ * 本文件实现了将内容写入文件的工具，功能包括：
+ * 1. 写入文件内容，文件不存在时自动创建
+ * 2. 自动递归创建父目录
+ * 3. 支持中止信号（AbortSignal）
+ * 4. 可插拔的写入操作（WriteOperations），支持远程文件系统（如 SSH）
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "fs/promises";
@@ -9,16 +19,17 @@ const writeSchema = Type.Object({
 	content: Type.String({ description: "Content to write to the file" }),
 });
 
+/** 写入工具的输入参数类型 */
 export type WriteToolInput = Static<typeof writeSchema>;
 
 /**
- * Pluggable operations for the write tool.
- * Override these to delegate file writing to remote systems (e.g., SSH).
+ * 写入工具的可插拔操作接口。
+ * 可通过覆写此接口将文件写入委托给远程系统（如 SSH）。
  */
 export interface WriteOperations {
-	/** Write content to a file */
+	/** 将内容写入文件 */
 	writeFile: (absolutePath: string, content: string) => Promise<void>;
-	/** Create directory (recursively) */
+	/** 递归创建目录 */
 	mkdir: (dir: string) => Promise<void>;
 }
 
@@ -27,11 +38,16 @@ const defaultWriteOperations: WriteOperations = {
 	mkdir: (dir) => fsMkdir(dir, { recursive: true }).then(() => {}),
 };
 
+/** 写入工具的配置选项 */
 export interface WriteToolOptions {
-	/** Custom operations for file writing. Default: local filesystem */
+	/** 自定义文件写入操作，默认使用本地文件系统 */
 	operations?: WriteOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的文件写入工具实例。
+ * 自动创建父目录，支持中止操作。
+ */
 export function createWriteTool(cwd: string, options?: WriteToolOptions): AgentTool<typeof writeSchema> {
 	const ops = options?.operations ?? defaultWriteOperations;
 
@@ -114,5 +130,5 @@ export function createWriteTool(cwd: string, options?: WriteToolOptions): AgentT
 	};
 }
 
-/** Default write tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认写入工具实例，保持向后兼容 */
 export const writeTool = createWriteTool(process.cwd());

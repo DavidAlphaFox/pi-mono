@@ -1,5 +1,8 @@
 /**
- * Simple text input component for extensions.
+ * 扩展文本输入组件。
+ *
+ * 该文件提供用于扩展系统的简单文本输入对话框，
+ * 支持标题显示、可选的超时倒计时和提交/取消操作。
  */
 
 import { Container, type Focusable, getEditorKeybindings, Input, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
@@ -8,11 +11,17 @@ import { CountdownTimer } from "./countdown-timer.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
 
+/** 扩展输入组件的配置选项 */
 export interface ExtensionInputOptions {
 	tui?: TUI;
 	timeout?: number;
 }
 
+/**
+ * 扩展文本输入组件。
+ * 在边框内显示标题和输入框，支持可选的超时倒计时。
+ * 实现 Focusable 接口以支持 IME 光标定位。
+ */
 export class ExtensionInputComponent extends Container implements Focusable {
 	private input: Input;
 	private onSubmitCallback: (value: string) => void;

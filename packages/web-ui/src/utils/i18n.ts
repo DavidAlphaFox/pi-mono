@@ -1,5 +1,13 @@
+/**
+ * @file i18n.ts
+ * @description 国际化（i18n）配置。
+ * 扩展 mini-lit 的 i18n 系统，定义 Web UI 组件库所需的所有翻译键，
+ * 提供英语和德语翻译，支持通过 setLanguage 动态切换语言。
+ */
+
 import { defaultEnglish, defaultGerman, type MiniLitRequiredMessages, setTranslations } from "@mariozechner/mini-lit";
 
+/** 扩展 mini-lit 的 i18n 消息接口，添加 Web UI 专用的翻译键 */
 declare module "@mariozechner/mini-lit" {
 	interface i18nMessages extends MiniLitRequiredMessages {
 		Free: string;

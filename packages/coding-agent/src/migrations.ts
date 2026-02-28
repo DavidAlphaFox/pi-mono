@@ -1,5 +1,12 @@
 /**
- * One-time migrations that run on startup.
+ * 启动时执行的一次性迁移模块
+ *
+ * 职责：
+ * - 将旧版 oauth.json 和 settings.json 中的 apiKeys 迁移到 auth.json
+ * - 将错误位置的会话文件迁移到正确的目录结构
+ * - 将 commands/ 目录重命名为 prompts/
+ * - 将 tools/ 中的 fd/rg 二进制文件迁移到 bin/
+ * - 检测并警告已弃用的 hooks/ 和 tools/ 扩展目录
  */
 
 import chalk from "chalk";
@@ -12,9 +19,9 @@ const MIGRATION_GUIDE_URL =
 const EXTENSIONS_DOC_URL = "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md";
 
 /**
- * Migrate legacy oauth.json and settings.json apiKeys to auth.json.
+ * 将旧版 oauth.json 和 settings.json 中的 apiKeys 迁移到统一的 auth.json。
  *
- * @returns Array of provider names that were migrated
+ * @returns 已迁移的提供商名称数组
  */
 export function migrateAuthToAuthJson(): string[] {
 	const agentDir = getAgentDir();
@@ -71,13 +78,13 @@ export function migrateAuthToAuthJson(): string[] {
 }
 
 /**
- * Migrate sessions from ~/.pi/agent/*.jsonl to proper session directories.
+ * 将会话文件从 ~/.pi/agent/*.jsonl 迁移到正确的会话目录。
  *
- * Bug in v0.30.0: Sessions were saved to ~/.pi/agent/ instead of
- * ~/.pi/agent/sessions/<encoded-cwd>/. This migration moves them
- * to the correct location based on the cwd in their session header.
+ * v0.30.0 的 bug：会话被保存到 ~/.pi/agent/ 而非
+ * ~/.pi/agent/sessions/<encoded-cwd>/。此迁移根据会话头中的 cwd
+ * 将文件移动到正确位置。
  *
- * See: https://github.com/badlogic/pi-mono/issues/320
+ * 参见: https://github.com/badlogic/pi-mono/issues/320
  */
 export function migrateSessionsFromAgentRoot(): void {
 	const agentDir = getAgentDir();
@@ -129,8 +136,8 @@ export function migrateSessionsFromAgentRoot(): void {
 }
 
 /**
- * Migrate commands/ to prompts/ if needed.
- * Works for both regular directories and symlinks.
+ * 将 commands/ 目录迁移为 prompts/（如需要）。
+ * 同时支持常规目录和符号链接。
  */
 function migrateCommandsToPrompts(baseDir: string, label: string): boolean {
 	const commandsDir = join(baseDir, "commands");
@@ -153,7 +160,7 @@ function migrateCommandsToPrompts(baseDir: string, label: string): boolean {
 }
 
 /**
- * Move fd/rg binaries from tools/ to bin/ if they exist.
+ * 将 fd/rg 二进制文件从 tools/ 移动到 bin/（如果存在的话）。
  */
 function migrateToolsToBin(): void {
 	const agentDir = getAgentDir();
@@ -197,8 +204,8 @@ function migrateToolsToBin(): void {
 }
 
 /**
- * Check for deprecated hooks/ and tools/ directories.
- * Note: tools/ may contain fd/rg binaries extracted by pi, so only warn if it has other files.
+ * 检查已弃用的 hooks/ 和 tools/ 目录。
+ * 注意：tools/ 可能包含 pi 提取的 fd/rg 二进制文件，仅在有其他文件时才发出警告。
  */
 function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] {
 	const hooksDir = join(baseDir, "hooks");
@@ -233,7 +240,7 @@ function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] 
 }
 
 /**
- * Run extension system migrations (commands→prompts) and collect warnings about deprecated directories.
+ * 运行扩展系统迁移（commands→prompts）并收集关于已弃用目录的警告。
  */
 function migrateExtensionSystem(cwd: string): string[] {
 	const agentDir = getAgentDir();
@@ -253,7 +260,7 @@ function migrateExtensionSystem(cwd: string): string[] {
 }
 
 /**
- * Print deprecation warnings and wait for keypress.
+ * 打印弃用警告信息并等待用户按键继续。
  */
 export async function showDeprecationWarnings(warnings: string[]): Promise<void> {
 	if (warnings.length === 0) return;
@@ -279,9 +286,9 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
 }
 
 /**
- * Run all migrations. Called once on startup.
+ * 运行所有迁移。在启动时调用一次。
  *
- * @returns Object with migration results and deprecation warnings
+ * @returns 包含迁移结果和弃用警告的对象
  */
 export function runMigrations(cwd: string = process.cwd()): {
 	migratedAuthProviders: string[];

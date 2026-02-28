@@ -1,8 +1,14 @@
 /**
- * Branch summarization for tree navigation.
+ * 分支摘要生成（用于会话树导航）
  *
- * When navigating to a different point in the session tree, this generates
- * a summary of the branch being left so context isn't lost.
+ * 当用户导航到会话树的不同位置时，本模块为即将离开的分支生成摘要，
+ * 以确保上下文不会丢失。
+ *
+ * 主要功能：
+ * 1. 收集需要摘要的条目：从旧位置回溯到与目标位置的共同祖先
+ * 2. 带令牌预算的条目准备：从最新到最旧添加消息，优先保留最近的上下文
+ * 3. 文件操作跟踪：从工具调用和已有的分支摘要中提取文件操作
+ * 4. 使用 LLM 生成结构化分支摘要
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
@@ -30,15 +36,21 @@ import {
 // Types
 // ============================================================================
 
+/** 分支摘要生成的结果 */
 export interface BranchSummaryResult {
+	/** 生成的摘要文本 */
 	summary?: string;
+	/** 被读取的文件列表 */
 	readFiles?: string[];
+	/** 被修改的文件列表 */
 	modifiedFiles?: string[];
+	/** 是否被中止 */
 	aborted?: boolean;
+	/** 错误信息 */
 	error?: string;
 }
 
-/** Details stored in BranchSummaryEntry.details for file tracking */
+/** 存储在 BranchSummaryEntry.details 中的文件跟踪信息 */
 export interface BranchSummaryDetails {
 	readFiles: string[];
 	modifiedFiles: string[];
@@ -46,34 +58,37 @@ export interface BranchSummaryDetails {
 
 export type { FileOperations } from "./utils.js";
 
+/** 分支准备数据，包含提取的消息、文件操作和令牌统计 */
 export interface BranchPreparation {
-	/** Messages extracted for summarization, in chronological order */
+	/** 用于摘要的消息，按时间顺序排列 */
 	messages: AgentMessage[];
-	/** File operations extracted from tool calls */
+	/** 从工具调用中提取的文件操作 */
 	fileOps: FileOperations;
-	/** Total estimated tokens in messages */
+	/** 消息的估算总令牌数 */
 	totalTokens: number;
 }
 
+/** 收集条目的结果 */
 export interface CollectEntriesResult {
-	/** Entries to summarize, in chronological order */
+	/** 需要摘要的条目，按时间顺序排列 */
 	entries: SessionEntry[];
-	/** Common ancestor between old and new position, if any */
+	/** 旧位置和新位置的共同祖先（如果有） */
 	commonAncestorId: string | null;
 }
 
+/** 分支摘要生成选项 */
 export interface GenerateBranchSummaryOptions {
-	/** Model to use for summarization */
+	/** 用于摘要的模型 */
 	model: Model<any>;
-	/** API key for the model */
+	/** 模型的 API 密钥 */
 	apiKey: string;
-	/** Abort signal for cancellation */
+	/** 用于取消操作的中止信号 */
 	signal: AbortSignal;
-	/** Optional custom instructions for summarization */
+	/** 可选的自定义摘要指令 */
 	customInstructions?: string;
-	/** If true, customInstructions replaces the default prompt instead of being appended */
+	/** 如果为 true，customInstructions 替换默认提示词而非追加 */
 	replaceInstructions?: boolean;
-	/** Tokens reserved for prompt + LLM response (default 16384) */
+	/** 为提示词和 LLM 响应预留的令牌数（默认 16384） */
 	reserveTokens?: number;
 }
 
@@ -82,16 +97,15 @@ export interface GenerateBranchSummaryOptions {
 // ============================================================================
 
 /**
- * Collect entries that should be summarized when navigating from one position to another.
+ * 收集从一个位置导航到另一个位置时需要摘要的条目。
  *
- * Walks from oldLeafId back to the common ancestor with targetId, collecting entries
- * along the way. Does NOT stop at compaction boundaries - those are included and their
- * summaries become context.
+ * 从 oldLeafId 回溯到与 targetId 的共同祖先，沿途收集条目。
+ * 不会在压缩边界处停止 - 压缩条目也会被包含，其摘要成为上下文。
  *
- * @param session - Session manager (read-only access)
- * @param oldLeafId - Current position (where we're navigating from)
- * @param targetId - Target position (where we're navigating to)
- * @returns Entries to summarize and the common ancestor
+ * @param session - 会话管理器（只读访问）
+ * @param oldLeafId - 当前位置（导航起点）
+ * @param targetId - 目标位置（导航终点）
+ * @returns 需要摘要的条目和共同祖先
  */
 export function collectEntriesForBranchSummary(
 	session: ReadonlySessionManager,
@@ -138,8 +152,8 @@ export function collectEntriesForBranchSummary(
 // ============================================================================
 
 /**
- * Extract AgentMessage from a session entry.
- * Similar to getMessageFromEntry in compaction.ts but also handles compaction entries.
+ * 从会话条目中提取 AgentMessage。
+ * 类似于 compaction.ts 中的 getMessageFromEntry，但也处理压缩条目。
  */
 function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 	switch (entry.type) {
@@ -167,17 +181,17 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
 }
 
 /**
- * Prepare entries for summarization with token budget.
+ * 在令牌预算内准备摘要所需的条目。
  *
- * Walks entries from NEWEST to OLDEST, adding messages until we hit the token budget.
- * This ensures we keep the most recent context when the branch is too long.
+ * 从最新到最旧遍历条目，逐步添加消息直到达到令牌预算。
+ * 这确保在分支过长时优先保留最近的上下文。
  *
- * Also collects file operations from:
- * - Tool calls in assistant messages
- * - Existing branch_summary entries' details (for cumulative tracking)
+ * 同时从以下来源收集文件操作：
+ * - 助手消息中的工具调用
+ * - 现有 branch_summary 条目的详情（用于累积跟踪）
  *
- * @param entries - Entries in chronological order
- * @param tokenBudget - Maximum tokens to include (0 = no limit)
+ * @param entries - 按时间顺序排列的条目
+ * @param tokenBudget - 最大令牌数（0 表示无限制）
  */
 export function prepareBranchEntries(entries: SessionEntry[], tokenBudget: number = 0): BranchPreparation {
 	const messages: AgentMessage[] = [];
@@ -272,10 +286,10 @@ Use this EXACT format:
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
 /**
- * Generate a summary of abandoned branch entries.
+ * 为离开的分支条目生成摘要。
  *
- * @param entries - Session entries to summarize (chronological order)
- * @param options - Generation options
+ * @param entries - 需要摘要的会话条目（按时间顺序排列）
+ * @param options - 生成选项
  */
 export async function generateBranchSummary(
 	entries: SessionEntry[],

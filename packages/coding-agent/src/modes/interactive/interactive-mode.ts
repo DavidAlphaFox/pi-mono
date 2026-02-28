@@ -1,6 +1,17 @@
 /**
- * Interactive mode for the coding agent.
- * Handles TUI rendering and user interaction, delegating business logic to AgentSession.
+ * 交互式模式 — 编码代理的完整终端用户界面（TUI）。
+ *
+ * 该文件是交互模式的核心实现，负责：
+ * - TUI 界面的初始化、渲染和生命周期管理
+ * - 用户输入处理（编辑器、快捷键、Bash 模式）
+ * - 代理事件的订阅和 UI 更新（流式消息、工具执行、压缩等）
+ * - 扩展系统集成（UI 上下文、快捷键、部件）
+ * - 会话管理（新建、切换、分叉、树导航）
+ * - 模型选择、思考级别切换、设置面板等交互功能
+ * - 资源展示（上下文文件、技能、提示词、扩展、主题）
+ * - 版本检查和更新通知
+ *
+ * 业务逻辑委托给 AgentSession 处理，本文件专注于 UI 层。
  */
 
 import * as crypto from "node:crypto";
@@ -114,7 +125,7 @@ import {
 	theme,
 } from "./theme/theme.js";
 
-/** Interface for components that can be expanded/collapsed */
+/** 可展开/折叠组件的接口 */
 interface Expandable {
 	setExpanded(expanded: boolean): void;
 }
@@ -123,29 +134,35 @@ function isExpandable(obj: unknown): obj is Expandable {
 	return typeof obj === "object" && obj !== null && "setExpanded" in obj && typeof obj.setExpanded === "function";
 }
 
+/** 在压缩过程中排队等待的消息 */
 type CompactionQueuedMessage = {
 	text: string;
 	mode: "steer" | "followUp";
 };
 
 /**
- * Options for InteractiveMode initialization.
+ * 交互模式初始化选项。
  */
 export interface InteractiveModeOptions {
-	/** Providers that were migrated to auth.json (shows warning) */
+	/** 已迁移到 auth.json 的提供商列表（显示警告） */
 	migratedProviders?: string[];
-	/** Warning message if session model couldn't be restored */
+	/** 会话模型无法恢复时的警告消息 */
 	modelFallbackMessage?: string;
-	/** Initial message to send on startup (can include @file content) */
+	/** 启动时发送的初始消息（可包含 @file 引用内容） */
 	initialMessage?: string;
-	/** Images to attach to the initial message */
+	/** 附加到初始消息的图片内容 */
 	initialImages?: ImageContent[];
-	/** Additional messages to send after the initial message */
+	/** 在初始消息之后要发送的额外消息 */
 	initialMessages?: string[];
-	/** Force verbose startup (overrides quietStartup setting) */
+	/** 强制详细启动输出（覆盖 quietStartup 设置） */
 	verbose?: boolean;
 }
 
+/**
+ * 交互模式主类。
+ * 管理完整的 TUI 界面生命周期，包括 UI 组件、事件处理、
+ * 扩展集成和用户交互循环。
+ */
 export class InteractiveMode {
 	private session: AgentSession;
 	private ui: TUI;
@@ -171,59 +188,59 @@ export class InteractiveMode {
 	private lastEscapeTime = 0;
 	private changelogMarkdown: string | undefined = undefined;
 
-	// Status line tracking (for mutating immediately-sequential status updates)
+	// 状态行追踪（用于连续的状态更新修改）
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
 
-	// Streaming message tracking
+	// 流式消息追踪
 	private streamingComponent: AssistantMessageComponent | undefined = undefined;
 	private streamingMessage: AssistantMessage | undefined = undefined;
 
-	// Tool execution tracking: toolCallId -> component
+	// 工具执行追踪：toolCallId -> 组件
 	private pendingTools = new Map<string, ToolExecutionComponent>();
 
-	// Tool output expansion state
+	// 工具输出展开/折叠状态
 	private toolOutputExpanded = false;
 
-	// Thinking block visibility state
+	// 思考块可见性状态
 	private hideThinkingBlock = false;
 
-	// Skill commands: command name -> skill file path
+	// 技能命令映射：命令名 -> 技能文件路径
 	private skillCommands = new Map<string, string>();
 
-	// Agent subscription unsubscribe function
+	// 代理事件订阅的取消函数
 	private unsubscribe?: () => void;
 
-	// Track if editor is in bash mode (text starts with !)
+	// 追踪编辑器是否处于 Bash 模式（文本以 ! 开头）
 	private isBashMode = false;
 
-	// Track current bash execution component
+	// 追踪当前 Bash 执行组件
 	private bashComponent: BashExecutionComponent | undefined = undefined;
 
-	// Track pending bash components (shown in pending area, moved to chat on submit)
+	// 待处理的 Bash 组件（在待处理区域显示，提交后移到聊天区）
 	private pendingBashComponents: BashExecutionComponent[] = [];
 
-	// Auto-compaction state
+	// 自动压缩状态
 	private autoCompactionLoader: Loader | undefined = undefined;
 	private autoCompactionEscapeHandler?: () => void;
 
-	// Auto-retry state
+	// 自动重试状态
 	private retryLoader: Loader | undefined = undefined;
 	private retryEscapeHandler?: () => void;
 
-	// Messages queued while compaction is running
+	// 压缩运行期间排队的消息
 	private compactionQueuedMessages: CompactionQueuedMessage[] = [];
 
-	// Shutdown state
+	// 关机状态
 	private shutdownRequested = false;
 
-	// Extension UI state
+	// 扩展 UI 状态
 	private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
 	private extensionInput: ExtensionInputComponent | undefined = undefined;
 	private extensionEditor: ExtensionEditorComponent | undefined = undefined;
 	private extensionTerminalInputUnsubscribers = new Set<() => void>();
 
-	// Extension widgets (components rendered above/below the editor)
+	// 扩展部件（渲染在编辑器上方/下方的组件）
 	private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
 	private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
 	private widgetContainerAbove!: Container;
@@ -241,7 +258,7 @@ export class InteractiveMode {
 	// Custom header from extension (undefined = use built-in header)
 	private customHeader: (Component & { dispose?(): void }) | undefined = undefined;
 
-	// Convenience accessors
+	// 便捷访问器
 	private get agent() {
 		return this.session.agent;
 	}

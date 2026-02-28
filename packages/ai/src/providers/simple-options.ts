@@ -1,5 +1,15 @@
+/**
+ * @file 简化选项构建工具
+ *
+ * 本文件提供将 SimpleStreamOptions 转换为各提供商所需的 StreamOptions 的工具函数：
+ * - buildBaseOptions()：从简化选项中提取基础流式请求参数
+ * - clampReasoning()：将 xhigh 推理级别降级为 high（用于不支持 xhigh 的提供商）
+ * - adjustMaxTokensForThinking()：根据推理级别调整最大令牌数和思考预算
+ */
+
 import type { Api, Model, SimpleStreamOptions, StreamOptions, ThinkingBudgets, ThinkingLevel } from "../types.js";
 
+/** 从 SimpleStreamOptions 中提取基础流式请求参数，构建 StreamOptions */
 export function buildBaseOptions(model: Model<Api>, options?: SimpleStreamOptions, apiKey?: string): StreamOptions {
 	return {
 		temperature: options?.temperature,
@@ -15,10 +25,16 @@ export function buildBaseOptions(model: Model<Api>, options?: SimpleStreamOption
 	};
 }
 
+/** 将 xhigh 推理级别降级为 high，用于不支持 xhigh 的提供商 */
 export function clampReasoning(effort: ThinkingLevel | undefined): Exclude<ThinkingLevel, "xhigh"> | undefined {
 	return effort === "xhigh" ? "high" : effort;
 }
 
+/**
+ * 根据推理级别调整最大令牌数和思考预算。
+ * 思考预算会占用部分输出令牌配额，此函数确保总量不超过模型上限，
+ * 同时保留至少 1024 个令牌用于实际输出。
+ */
 export function adjustMaxTokensForThinking(
 	baseMaxTokens: number,
 	modelMaxTokens: number,

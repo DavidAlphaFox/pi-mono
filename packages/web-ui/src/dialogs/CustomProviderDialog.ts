@@ -1,3 +1,10 @@
+/**
+ * @file CustomProviderDialog.ts
+ * @description 自定义 LLM 提供商添加/编辑对话框。
+ * 支持配置提供商名称、类型（OpenAI 兼容/Ollama/llama.cpp/vLLM/LM Studio）、
+ * 基础 URL、API Key，并支持自动发现模型。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { DialogBase } from "@mariozechner/mini-lit/dist/DialogBase.js";
@@ -11,6 +18,10 @@ import { getAppStorage } from "../storage/app-storage.js";
 import type { CustomProvider, CustomProviderType } from "../storage/stores/custom-providers-store.js";
 import { discoverModels } from "../utils/model-discovery.js";
 
+/**
+ * 自定义提供商对话框 Web Component。
+ * 提供表单界面用于创建或编辑自定义 LLM 提供商配置。
+ */
 export class CustomProviderDialog extends DialogBase {
 	private provider?: CustomProvider;
 	private initialType?: CustomProviderType;

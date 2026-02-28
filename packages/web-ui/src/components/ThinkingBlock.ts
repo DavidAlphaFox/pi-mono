@@ -1,8 +1,19 @@
+/**
+ * @file ThinkingBlock.ts
+ * @description 思维/推理过程展示块组件（<thinking-block>）。
+ * 以可展开/折叠的方式展示 AI 的思考过程，
+ * 流式状态下带有闪烁动画效果。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import { html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { ChevronRight } from "lucide";
 
+/**
+ * 思维块 Web Component。
+ * 点击展开/折叠思考内容，流式传输时显示闪烁动画。
+ */
 @customElement("thinking-block")
 export class ThinkingBlock extends LitElement {
 	@property() content!: string;

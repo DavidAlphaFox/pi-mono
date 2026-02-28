@@ -1,32 +1,63 @@
+/**
+ * @file 可选择列表组件
+ *
+ * 提供带有上下键导航、滚动和过滤功能的选择列表。
+ * 支持项目描述显示和滚动指示器。
+ */
+
 import { getEditorKeybindings } from "../keybindings.js";
 import type { Component } from "../tui.js";
 import { truncateToWidth } from "../utils.js";
 
+/** 将多行文本规范化为单行 */
 const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/g, " ").trim();
 
+/** 选择列表项 */
 export interface SelectItem {
+	/** 项目值（用于程序处理） */
 	value: string;
+	/** 显示标签 */
 	label: string;
+	/** 可选描述文本 */
 	description?: string;
 }
 
+/** 选择列表主题配置 */
 export interface SelectListTheme {
+	/** 选中项前缀样式（如 "→"） */
 	selectedPrefix: (text: string) => string;
+	/** 选中项文本样式 */
 	selectedText: (text: string) => string;
+	/** 描述文本样式 */
 	description: (text: string) => string;
+	/** 滚动信息样式 */
 	scrollInfo: (text: string) => string;
+	/** 无匹配结果提示样式 */
 	noMatch: (text: string) => string;
 }
 
+/**
+ * 可选择列表组件。
+ * 支持键盘导航（上/下/回车/Escape）、过滤和滚动。
+ * 选中项通过 onSelect 回调通知。
+ */
 export class SelectList implements Component {
+	/** 所有项目列表 */
 	private items: SelectItem[] = [];
+	/** 过滤后的项目列表 */
 	private filteredItems: SelectItem[] = [];
+	/** 当前选中项索引 */
 	private selectedIndex: number = 0;
+	/** 最大可见行数 */
 	private maxVisible: number = 5;
+	/** 主题配置 */
 	private theme: SelectListTheme;
 
+	/** 项目被选中时的回调 */
 	public onSelect?: (item: SelectItem) => void;
+	/** 取消选择时的回调 */
 	public onCancel?: () => void;
+	/** 选择项变化时的回调（导航时触发） */
 	public onSelectionChange?: (item: SelectItem) => void;
 
 	constructor(items: SelectItem[], maxVisible: number, theme: SelectListTheme) {
@@ -36,12 +67,14 @@ export class SelectList implements Component {
 		this.theme = theme;
 	}
 
+	/** 设置过滤器文本，重新过滤项目列表 */
 	setFilter(filter: string): void {
 		this.filteredItems = this.items.filter((item) => item.value.toLowerCase().startsWith(filter.toLowerCase()));
 		// Reset selection when filter changes
 		this.selectedIndex = 0;
 	}
 
+	/** 设置选中项索引（自动限制在有效范围内） */
 	setSelectedIndex(index: number): void {
 		this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
 	}
@@ -147,6 +180,7 @@ export class SelectList implements Component {
 		return lines;
 	}
 
+	/** 处理键盘输入（上/下导航、回车确认、Escape 取消） */
 	handleInput(keyData: string): void {
 		const kb = getEditorKeybindings();
 		// Up arrow - wrap to bottom when at top
@@ -181,6 +215,7 @@ export class SelectList implements Component {
 		}
 	}
 
+	/** 获取当前选中的项目 */
 	getSelectedItem(): SelectItem | null {
 		const item = this.filteredItems[this.selectedIndex];
 		return item || null;

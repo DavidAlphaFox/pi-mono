@@ -1,3 +1,16 @@
+/**
+ * @file AWS Bedrock Converse Stream 提供商
+ *
+ * 本文件实现了 AWS Bedrock ConverseStream API 的流式调用，支持：
+ * - Claude 4.x 自适应思考（adaptive thinking）和 3.x 预算式思考
+ * - 提示缓存（CachePoint）及 TTL 控制（短期/长期）
+ * - 思考签名（Thinking Signature）的选择性传递（仅 Anthropic Claude 模型）
+ * - 多模态工具结果（图像 base64 编码为 Uint8Array）
+ * - 连续 toolResult 消息自动合并为单条 user 消息
+ * - HTTP 代理和 HTTP/1.1 降级支持
+ * - 交错思考（Interleaved Thinking）beta 支持
+ */
+
 import {
 	BedrockRuntimeClient,
 	type BedrockRuntimeClientConfig,
@@ -45,6 +58,7 @@ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
 import { adjustMaxTokensForThinking, buildBaseOptions, clampReasoning } from "./simple-options.js";
 import { transformMessages } from "./transform-messages.js";
 
+/** AWS Bedrock Converse Stream 流式调用选项 */
 export interface BedrockOptions extends StreamOptions {
 	region?: string;
 	profile?: string;
@@ -59,6 +73,7 @@ export interface BedrockOptions extends StreamOptions {
 
 type Block = (TextContent | ThinkingContent | ToolCall) & { index?: number; partialJson?: string };
 
+/** AWS Bedrock Converse Stream 的底层流式调用函数 */
 export const streamBedrock: StreamFunction<"bedrock-converse-stream", BedrockOptions> = (
 	model: Model<"bedrock-converse-stream">,
 	context: Context,
@@ -204,6 +219,7 @@ export const streamBedrock: StreamFunction<"bedrock-converse-stream", BedrockOpt
 	return stream;
 };
 
+/** AWS Bedrock Converse Stream 的简化版流式调用函数，自动处理思考配置 */
 export const streamSimpleBedrock: StreamFunction<"bedrock-converse-stream", SimpleStreamOptions> = (
 	model: Model<"bedrock-converse-stream">,
 	context: Context,

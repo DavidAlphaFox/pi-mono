@@ -1,3 +1,17 @@
+/**
+ * @file 终端接口和实现
+ *
+ * 本文件定义了 TUI 框架所需的终端抽象接口（Terminal），
+ * 以及基于 process.stdin/stdout 的真实终端实现（ProcessTerminal）。
+ *
+ * ProcessTerminal 负责：
+ * - 启用原始模式（raw mode）以获取逐键输入
+ * - 查询和启用 Kitty 键盘协议（支持修饰键和按键事件类型）
+ * - 启用括号粘贴模式（bracketed paste mode）
+ * - Windows 平台的 VT 输入支持
+ * - 通过 StdinBuffer 将批量输入拆分为独立序列
+ */
+
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import { setKittyProtocolActive } from "./keys.js";
@@ -6,59 +20,79 @@ import { StdinBuffer } from "./stdin-buffer.js";
 const cjsRequire = createRequire(import.meta.url);
 
 /**
- * Minimal terminal interface for TUI
+ * TUI 框架的最小终端接口
+ *
+ * 定义了 TUI 需要的所有终端操作，
+ * 可以用不同的实现替换（如测试用的模拟终端）。
  */
 export interface Terminal {
-	// Start the terminal with input and resize handlers
+	/** 使用输入和调整大小的处理器启动终端 */
 	start(onInput: (data: string) => void, onResize: () => void): void;
 
-	// Stop the terminal and restore state
+	/** 停止终端并恢复状态 */
 	stop(): void;
 
 	/**
-	 * Drain stdin before exiting to prevent Kitty key release events from
-	 * leaking to the parent shell over slow SSH connections.
-	 * @param maxMs - Maximum time to drain (default: 1000ms)
-	 * @param idleMs - Exit early if no input arrives within this time (default: 50ms)
+	 * 在退出前排空标准输入，防止 Kitty 按键释放事件
+	 * 在慢速 SSH 连接上泄漏到父 Shell。
+	 * @param maxMs - 最大排空时间（默认：1000ms）
+	 * @param idleMs - 如果在此时间内没有输入则提前退出（默认：50ms）
 	 */
 	drainInput(maxMs?: number, idleMs?: number): Promise<void>;
 
-	// Write output to terminal
+	/** 向终端写入输出 */
 	write(data: string): void;
 
-	// Get terminal dimensions
+	/** 获取终端列数 */
 	get columns(): number;
+	/** 获取终端行数 */
 	get rows(): number;
 
-	// Whether Kitty keyboard protocol is active
+	/** Kitty 键盘协议是否处于活跃状态 */
 	get kittyProtocolActive(): boolean;
 
-	// Cursor positioning (relative to current position)
-	moveBy(lines: number): void; // Move cursor up (negative) or down (positive) by N lines
+	/** 相对移动光标（正数向下，负数向上） */
+	moveBy(lines: number): void;
 
-	// Cursor visibility
-	hideCursor(): void; // Hide the cursor
-	showCursor(): void; // Show the cursor
+	/** 隐藏光标 */
+	hideCursor(): void;
+	/** 显示光标 */
+	showCursor(): void;
 
-	// Clear operations
-	clearLine(): void; // Clear current line
-	clearFromCursor(): void; // Clear from cursor to end of screen
-	clearScreen(): void; // Clear entire screen and move cursor to (0,0)
+	/** 清除当前行 */
+	clearLine(): void;
+	/** 从光标位置清除到屏幕末尾 */
+	clearFromCursor(): void;
+	/** 清除整个屏幕并将光标移到 (0,0) */
+	clearScreen(): void;
 
-	// Title operations
-	setTitle(title: string): void; // Set terminal window title
+	/** 设置终端窗口标题 */
+	setTitle(title: string): void;
 }
 
 /**
- * Real terminal using process.stdin/stdout
+ * 基于 process.stdin/stdout 的真实终端实现
+ *
+ * 启动时会：
+ * 1. 启用原始模式以获取逐键输入
+ * 2. 启用括号粘贴模式
+ * 3. 查询并启用 Kitty 键盘协议
+ * 4. 在 Windows 上启用 VT 输入
  */
 export class ProcessTerminal implements Terminal {
+	/** 启动前是否已处于原始模式 */
 	private wasRaw = false;
+	/** 键盘输入处理回调 */
 	private inputHandler?: (data: string) => void;
+	/** 终端大小调整处理回调 */
 	private resizeHandler?: () => void;
+	/** Kitty 键盘协议是否已激活 */
 	private _kittyProtocolActive = false;
+	/** 标准输入缓冲区（将批量输入拆分为独立序列） */
 	private stdinBuffer?: StdinBuffer;
+	/** stdin data 事件处理器引用（用于后续清理） */
 	private stdinDataHandler?: (data: string) => void;
+	/** 写入日志路径（调试用） */
 	private writeLogPath = process.env.PI_TUI_WRITE_LOG || "";
 
 	get kittyProtocolActive(): boolean {
@@ -102,12 +136,12 @@ export class ProcessTerminal implements Terminal {
 	}
 
 	/**
-	 * Set up StdinBuffer to split batched input into individual sequences.
-	 * This ensures components receive single events, making matchesKey/isKeyRelease work correctly.
+	 * 设置 StdinBuffer 将批量输入拆分为独立序列。
+	 * 确保组件接收单个事件，使 matchesKey/isKeyRelease 正确工作。
 	 *
-	 * Also watches for Kitty protocol response and enables it when detected.
-	 * This is done here (after stdinBuffer parsing) rather than on raw stdin
-	 * to handle the case where the response arrives split across multiple events.
+	 * 同时监视 Kitty 协议响应并在检测到时启用。
+	 * 在 stdinBuffer 解析之后（而非原始 stdin 上）执行此操作，
+	 * 以处理响应跨多个事件分割到达的情况。
 	 */
 	private setupStdinBuffer(): void {
 		this.stdinBuffer = new StdinBuffer({ timeout: 10 });
@@ -153,13 +187,13 @@ export class ProcessTerminal implements Terminal {
 	}
 
 	/**
-	 * Query terminal for Kitty keyboard protocol support and enable if available.
+	 * 查询终端是否支持 Kitty 键盘协议并在支持时启用。
 	 *
-	 * Sends CSI ? u to query current flags. If terminal responds with CSI ? <flags> u,
-	 * it supports the protocol and we enable it with CSI > 1 u.
+	 * 发送 CSI ? u 查询当前标志。如果终端响应 CSI ? <flags> u，
+	 * 则表示支持该协议，我们用 CSI > 1 u 启用它。
 	 *
-	 * The response is detected in setupStdinBuffer's data handler, which properly
-	 * handles the case where the response arrives split across multiple stdin events.
+	 * 响应在 setupStdinBuffer 的 data 处理器中检测，
+	 * 能正确处理响应跨多个 stdin 事件分割到达的情况。
 	 */
 	private queryAndEnableKittyProtocol(): void {
 		this.setupStdinBuffer();
@@ -168,10 +202,10 @@ export class ProcessTerminal implements Terminal {
 	}
 
 	/**
-	 * On Windows, add ENABLE_VIRTUAL_TERMINAL_INPUT (0x0200) to the stdin
-	 * console handle so the terminal sends VT sequences for modified keys
-	 * (e.g. \x1b[Z for Shift+Tab). Without this, libuv's ReadConsoleInputW
-	 * discards modifier state and Shift+Tab arrives as plain \t.
+	 * 在 Windows 上为 stdin 控制台句柄添加 ENABLE_VIRTUAL_TERMINAL_INPUT (0x0200)，
+	 * 使终端发送 VT 序列来表示修饰键（如 Shift+Tab 的 \x1b[Z）。
+	 * 若不启用，libuv 的 ReadConsoleInputW 会丢弃修饰键状态，
+	 * Shift+Tab 将作为普通 \t 到达。
 	 */
 	private enableWindowsVTInput(): void {
 		if (process.platform !== "win32") return;

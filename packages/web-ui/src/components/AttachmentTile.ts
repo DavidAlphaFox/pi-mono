@@ -1,3 +1,10 @@
+/**
+ * @file AttachmentTile.ts
+ * @description 附件缩略图组件（<attachment-tile>）。
+ * 以小型卡片形式展示文件附件，支持图片预览、文件类型图标、
+ * 点击查看全屏预览、可选删除按钮等功能。
+ */
+
 import { icon } from "@mariozechner/mini-lit/dist/icons.js";
 import { LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
@@ -7,6 +14,10 @@ import { AttachmentOverlay } from "../dialogs/AttachmentOverlay.js";
 import type { Attachment } from "../utils/attachment-utils.js";
 import { i18n } from "../utils/i18n.js";
 
+/**
+ * 附件缩略图 Web Component。
+ * 根据附件 MIME 类型显示图片缩略图或文件图标，点击打开全屏预览。
+ */
 @customElement("attachment-tile")
 export class AttachmentTile extends LitElement {
 	@property({ type: Object }) attachment!: Attachment;

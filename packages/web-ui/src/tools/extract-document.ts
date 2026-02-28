@@ -1,3 +1,10 @@
+/**
+ * @file extract-document.ts
+ * @description 文档提取工具。
+ * 从 URL 下载 PDF、DOCX、XLSX、PPTX 文件并提取纯文本内容。
+ * 包含工具定义、执行逻辑和渲染器。
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { type Static, Type } from "@sinclair/typebox";
@@ -11,7 +18,7 @@ import { registerToolRenderer, renderCollapsibleHeader, renderHeader } from "./r
 import type { ToolRenderer, ToolRenderResult } from "./types.js";
 
 // ============================================================================
-// TYPES
+// 类型定义
 // ============================================================================
 
 const extractDocumentSchema = Type.Object({
@@ -20,8 +27,10 @@ const extractDocumentSchema = Type.Object({
 	}),
 });
 
+/** 文档提取工具参数类型 */
 export type ExtractDocumentParams = Static<typeof extractDocumentSchema>;
 
+/** 文档提取结果接口 */
 export interface ExtractDocumentResult {
 	extractedText: string;
 	format: string;

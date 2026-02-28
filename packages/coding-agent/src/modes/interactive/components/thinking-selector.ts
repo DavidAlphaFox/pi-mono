@@ -1,8 +1,16 @@
+/**
+ * 思考级别选择器组件。
+ *
+ * 该文件提供用于选择 AI 模型思考深度级别的选择器组件，
+ * 从关闭到最大推理等多个级别可选。
+ */
+
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { Container, type SelectItem, SelectList } from "@mariozechner/pi-tui";
 import { getSelectListTheme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
+/** 各思考级别的描述映射 */
 const LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 	off: "No reasoning",
 	minimal: "Very brief reasoning (~1k tokens)",
@@ -13,7 +21,8 @@ const LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 };
 
 /**
- * Component that renders a thinking level selector with borders
+ * 思考级别选择器组件。
+ * 以带边框的列表形式展示可用的思考级别，预选当前级别。
  */
 export class ThinkingSelectorComponent extends Container {
 	private selectList: SelectList;

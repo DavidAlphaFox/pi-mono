@@ -1,8 +1,16 @@
+/**
+ * @file store.ts
+ * @description 存储 Store 抽象基类。
+ * 所有具体 Store（SettingsStore、SessionsStore 等）的基类，
+ * 定义了 IndexedDB Schema 配置和后端访问的统一接口。
+ */
+
 import type { StorageBackend, StoreConfig } from "./types.js";
 
 /**
- * Base class for all storage stores.
- * Each store defines its IndexedDB schema and provides domain-specific methods.
+ * Store 抽象基类。
+ * 每个 Store 定义其 IndexedDB 架构（store 名称、键路径、索引），
+ * 并通过 getBackend() 访问存储后端。
  */
 export abstract class Store {
 	private backend: StorageBackend | null = null;

@@ -1,3 +1,10 @@
+/**
+ * @file ApiKeyPromptDialog.ts
+ * @description API Key 提示对话框（<api-key-prompt-dialog>）。
+ * 当用户尝试使用需要 API Key 的提供商但未配置时弹出，
+ * 提供输入框并轮询检测 Key 是否已保存。
+ */
+
 import { customElement, state } from "lit/decorators.js";
 import "../components/ProviderKeyInput.js";
 import { DialogContent, DialogHeader } from "@mariozechner/mini-lit/dist/Dialog.js";
@@ -6,6 +13,10 @@ import { html } from "lit";
 import { getAppStorage } from "../storage/app-storage.js";
 import { i18n } from "../utils/i18n.js";
 
+/**
+ * API Key 提示对话框 Web Component。
+ * 通过轮询机制检测用户是否已输入有效的 API Key，自动关闭并返回结果。
+ */
 @customElement("api-key-prompt-dialog")
 export class ApiKeyPromptDialog extends DialogBase {
 	@state() private provider = "";

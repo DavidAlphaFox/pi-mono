@@ -1,11 +1,19 @@
+/**
+ * 分支摘要消息组件。
+ *
+ * 该文件提供分支操作摘要的显示组件，支持折叠/展开两种状态，
+ * 用于在会话分支操作后展示分支摘要信息。
+ */
+
 import { Box, Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
 import type { BranchSummaryMessage } from "../../../core/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { editorKey } from "./keybinding-hints.js";
 
 /**
- * Component that renders a branch summary message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
+ * 分支摘要消息渲染组件。
+ * 使用与自定义消息相同的背景色以保持视觉一致性。
+ * 折叠时显示简要提示，展开时以 Markdown 格式显示完整摘要。
  */
 export class BranchSummaryMessageComponent extends Box {
 	private expanded = false;

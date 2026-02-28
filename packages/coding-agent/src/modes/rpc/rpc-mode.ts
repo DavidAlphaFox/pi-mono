@@ -1,14 +1,14 @@
 /**
- * RPC mode: Headless operation with JSON stdin/stdout protocol.
+ * RPC 模式：使用 JSON stdin/stdout 协议的无界面操作模式。
  *
- * Used for embedding the agent in other applications.
- * Receives commands as JSON on stdin, outputs events and responses as JSON on stdout.
+ * 该文件实现了 RPC 模式的完整服务端逻辑，用于将代理嵌入其他应用程序中。
+ * 通过 stdin 接收 JSON 命令，通过 stdout 输出事件和响应。
  *
- * Protocol:
- * - Commands: JSON objects with `type` field, optional `id` for correlation
- * - Responses: JSON objects with `type: "response"`, `command`, `success`, and optional `data`/`error`
- * - Events: AgentSessionEvent objects streamed as they occur
- * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
+ * 协议规范：
+ * - 命令：带 `type` 字段的 JSON 对象，可选 `id` 用于关联响应
+ * - 响应：带 `type: "response"`、`command`、`success` 及可选 `data`/`error` 的 JSON 对象
+ * - 事件：AgentSessionEvent 对象，实时流式输出
+ * - 扩展 UI：扩展 UI 请求通过 stdout 发出，客户端通过 extension_ui_response 响应
  */
 
 import * as crypto from "node:crypto";
@@ -39,8 +39,9 @@ export type {
 } from "./rpc-types.js";
 
 /**
- * Run in RPC mode.
- * Listens for JSON commands on stdin, outputs events and responses on stdout.
+ * 运行 RPC 模式。
+ * 监听 stdin 上的 JSON 命令，通过 stdout 输出事件和响应。
+ * 该函数永不返回（Promise<never>），持续运行直到进程终止。
  */
 export async function runRpcMode(session: AgentSession): Promise<never> {
 	const output = (obj: RpcResponse | RpcExtensionUIRequest | object) => {

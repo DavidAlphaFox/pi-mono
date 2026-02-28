@@ -1,3 +1,10 @@
+/**
+ * @file ProviderKeyInput.ts
+ * @description API Key 输入组件（<provider-key-input>）。
+ * 提供 API Key 输入框，支持验证测试（向对应提供商发送测试请求），
+ * 显示验证状态（有效/无效/测试中）。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import { Badge } from "@mariozechner/mini-lit/dist/Badge.js";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
@@ -8,7 +15,7 @@ import { getAppStorage } from "../storage/app-storage.js";
 import { applyProxyIfNeeded } from "../utils/proxy-utils.js";
 import { Input } from "./Input.js";
 
-// Test models for each provider
+/** 各提供商用于测试 API Key 的模型 ID */
 const TEST_MODELS: Record<string, string> = {
 	anthropic: "claude-3-5-haiku-20241022",
 	openai: "gpt-4o-mini",

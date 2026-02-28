@@ -1,3 +1,10 @@
+/**
+ * 模型选择器组件。
+ *
+ * 该文件提供用于选择 AI 模型的交互式组件，
+ * 支持搜索过滤、作用域/全部模型切换、提供商标识显示等功能。
+ */
+
 import { type Model, modelsAreEqual } from "@mariozechner/pi-ai";
 import {
 	Container,
@@ -15,6 +22,7 @@ import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
 
+/** 模型列表项 */
 interface ModelItem {
 	provider: string;
 	id: string;
@@ -29,7 +37,7 @@ interface ScopedModelItem {
 type ModelScope = "all" | "scoped";
 
 /**
- * Component that renders a model selector with search
+ * 模型选择器组件，支持搜索过滤和分类显示。
  */
 export class ModelSelectorComponent extends Container implements Focusable {
 	private searchInput: Input;

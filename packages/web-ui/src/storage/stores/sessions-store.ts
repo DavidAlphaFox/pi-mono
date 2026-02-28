@@ -1,10 +1,18 @@
+/**
+ * @file sessions-store.ts
+ * @description 聊天会话 Store。
+ * 管理聊天会话的完整数据和元数据，使用两个 Object Store：
+ * sessions（完整数据）和 sessions-metadata（轻量元数据），
+ * 支持保存、加载、删除会话以及从 AgentState 提取元数据。
+ */
+
 import type { AgentState } from "@mariozechner/pi-agent-core";
 import { Store } from "../store.js";
 import type { SessionData, SessionMetadata, StoreConfig } from "../types.js";
 
 /**
- * Store for chat sessions (data and metadata).
- * Uses two object stores: sessions (full data) and sessions-metadata (lightweight).
+ * 聊天会话 Store。
+ * 数据与元数据分离存储以优化列表查询性能。
  */
 export class SessionsStore extends Store {
 	getConfig(): StoreConfig {

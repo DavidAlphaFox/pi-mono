@@ -1,5 +1,10 @@
 /**
- * List available models with optional fuzzy search
+ * 可用模型列表显示模块 - 支持模糊搜索
+ *
+ * 职责：
+ * - 从模型注册表获取所有可用模型
+ * - 支持按关键词模糊过滤模型
+ * - 以格式化表格输出模型信息（提供商、ID、上下文窗口、最大输出等）
  */
 
 import type { Api, Model } from "@mariozechner/pi-ai";
@@ -7,7 +12,7 @@ import { fuzzyFilter } from "@mariozechner/pi-tui";
 import type { ModelRegistry } from "../core/model-registry.js";
 
 /**
- * Format a number as human-readable (e.g., 200000 -> "200K", 1000000 -> "1M")
+ * 将数字格式化为可读形式（例如 200000 -> "200K", 1000000 -> "1M"）
  */
 function formatTokenCount(count: number): string {
 	if (count >= 1_000_000) {
@@ -22,7 +27,7 @@ function formatTokenCount(count: number): string {
 }
 
 /**
- * List available models, optionally filtered by search pattern
+ * 列出可用模型，可选按搜索模式过滤
  */
 export async function listModels(modelRegistry: ModelRegistry, searchPattern?: string): Promise<void> {
 	const models = modelRegistry.getAvailable();

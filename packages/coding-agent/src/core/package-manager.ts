@@ -1,3 +1,15 @@
+/**
+ * 包管理器模块
+ *
+ * 职责：
+ * - 管理 npm 和 git 来源的扩展包（安装、更新、移除）
+ * - 解析包源到具体的扩展/技能/提示词/主题路径
+ * - 支持全局和项目级包配置
+ * - 处理离线模式（PI_OFFLINE 环境变量）
+ * - 自动发现包内的资源（通过目录约定和 pi.json 配置）
+ * - 跟踪路径元数据（来源、作用域、原始类型）
+ */
+
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -17,6 +29,7 @@ function isOfflineModeEnabled(): boolean {
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
+/** 路径元数据 - 标识资源的来源和作用域 */
 export interface PathMetadata {
 	source: string;
 	scope: SourceScope;
@@ -24,12 +37,14 @@ export interface PathMetadata {
 	baseDir?: string;
 }
 
+/** 已解析的资源 - 路径 + 是否启用 + 元数据 */
 export interface ResolvedResource {
 	path: string;
 	enabled: boolean;
 	metadata: PathMetadata;
 }
 
+/** 所有已解析的资源路径（按资源类型分组） */
 export interface ResolvedPaths {
 	extensions: ResolvedResource[];
 	skills: ResolvedResource[];
@@ -37,8 +52,10 @@ export interface ResolvedPaths {
 	themes: ResolvedResource[];
 }
 
+/** 缺失包源的处理动作 */
 export type MissingSourceAction = "install" | "skip" | "error";
 
+/** 包操作进度事件 */
 export interface ProgressEvent {
 	type: "start" | "progress" | "complete" | "error";
 	action: "install" | "remove" | "update" | "clone" | "pull";
@@ -46,8 +63,10 @@ export interface ProgressEvent {
 	message?: string;
 }
 
+/** 进度回调类型 */
 export type ProgressCallback = (event: ProgressEvent) => void;
 
+/** 包管理器接口 */
 export interface PackageManager {
 	resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths>;
 	install(source: string, options?: { local?: boolean }): Promise<void>;
@@ -632,6 +651,16 @@ function applyPatterns(allPaths: string[], patterns: string[], baseDir: string):
 	return new Set(result);
 }
 
+/**
+ * 默认包管理器实现
+ *
+ * 支持的包源格式：
+ * - npm 包名（如 "pi-extension-foo"）
+ * - git URL（如 "https://github.com/user/repo.git"）
+ * - 本地文件路径
+ *
+ * 包安装位置：~/.pi/agent/packages/ 或 .pi/packages/（项目级）
+ */
 export class DefaultPackageManager implements PackageManager {
 	private cwd: string;
 	private agentDir: string;

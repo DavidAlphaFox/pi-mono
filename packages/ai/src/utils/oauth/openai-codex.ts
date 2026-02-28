@@ -1,8 +1,12 @@
 /**
- * OpenAI Codex (ChatGPT OAuth) flow
+ * @file OpenAI Codex（ChatGPT OAuth）认证流程
  *
- * NOTE: This module uses Node.js crypto and http for the OAuth callback.
- * It is only intended for CLI use, not browser environments.
+ * 实现 ChatGPT Plus/Pro 订阅的 OAuth 授权码流程（PKCE）。
+ * 通过本地 HTTP 服务器（端口 1455）接收 OAuth 回调，
+ * 支持浏览器回调和手动粘贴授权码两种方式。
+ * 从 JWT 令牌中提取 chatgpt_account_id 用于 API 请求。
+ *
+ * 注意：此模块使用 Node.js crypto 和 http，仅适用于 CLI 环境。
  */
 
 // NEVER convert to top-level imports - breaks browser/Vite builds (web-ui)
@@ -431,6 +435,7 @@ export async function refreshOpenAICodexToken(refreshToken: string): Promise<OAu
 	};
 }
 
+/** OpenAI Codex OAuth 提供商实现（适配 OAuthProviderInterface 接口） */
 export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	id: "openai-codex",
 	name: "ChatGPT Plus/Pro (Codex Subscription)",

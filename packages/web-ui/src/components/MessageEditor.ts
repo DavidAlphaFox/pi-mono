@@ -1,3 +1,10 @@
+/**
+ * @file MessageEditor.ts
+ * @description 消息编辑器组件（<message-editor>）。
+ * 提供富文本输入区域，支持附件上传（拖放/粘贴/文件选择）、
+ * 模型选择器、思维级别选择器、自动调整高度等功能。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { Select, type SelectOption } from "@mariozechner/mini-lit/dist/Select.js";
@@ -11,6 +18,11 @@ import { i18n } from "../utils/i18n.js";
 import "./AttachmentTile.js";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 
+/**
+ * 消息编辑器 Web Component。
+ * 包含文本输入框、附件管理、模型选择和发送/停止按钮。
+ * 支持拖放文件、粘贴图片、键盘快捷键发送等交互。
+ */
 @customElement("message-editor")
 export class MessageEditor extends LitElement {
 	private _value = "";

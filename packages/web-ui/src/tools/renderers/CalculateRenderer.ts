@@ -1,3 +1,9 @@
+/**
+ * @file CalculateRenderer.ts
+ * @description 计算器工具渲染器。
+ * 以 "表达式 = 结果" 的格式展示计算过程和结果。
+ */
+
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { html } from "lit";
 import { Calculator } from "lucide";
@@ -5,11 +11,12 @@ import { i18n } from "../../utils/i18n.js";
 import { renderHeader } from "../renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "../types.js";
 
+/** 计算器工具参数 */
 interface CalculateParams {
 	expression: string;
 }
 
-// Calculate tool has undefined details (only uses output)
+/** 计算器渲染器，展示数学表达式和计算结果 */
 export class CalculateRenderer implements ToolRenderer<CalculateParams, undefined> {
 	render(params: CalculateParams | undefined, result: ToolResultMessage<undefined> | undefined): ToolRenderResult {
 		const state = result ? (result.isError ? "error" : "complete") : "inprogress";

@@ -1,11 +1,19 @@
+/**
+ * 压缩摘要消息组件。
+ *
+ * 该文件提供上下文压缩操作摘要的显示组件，支持折叠/展开。
+ * 显示压缩前的 token 数量和压缩后的摘要内容。
+ */
+
 import { Box, Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
 import type { CompactionSummaryMessage } from "../../../core/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { editorKey } from "./keybinding-hints.js";
 
 /**
- * Component that renders a compaction message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
+ * 压缩摘要消息渲染组件。
+ * 使用与自定义消息相同的背景色以保持视觉一致性。
+ * 折叠时显示 token 数量概览，展开时以 Markdown 格式显示完整摘要。
  */
 export class CompactionSummaryMessageComponent extends Box {
 	private expanded = false;

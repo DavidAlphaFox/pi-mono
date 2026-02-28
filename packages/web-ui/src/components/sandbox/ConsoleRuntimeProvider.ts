@@ -1,5 +1,14 @@
+/**
+ * @file ConsoleRuntimeProvider.ts
+ * @description 控制台运行时提供者。
+ * 必需的提供者，应始终首先包含。
+ * 捕获沙箱中的 console.log/warn/error/info 输出，
+ * 处理错误和执行生命周期管理，收集控制台输出供调用者检索。
+ */
+
 import type { SandboxRuntimeProvider } from "./SandboxRuntimeProvider.js";
 
+/** 控制台日志条目接口 */
 export interface ConsoleLog {
 	type: "log" | "warn" | "error" | "info";
 	text: string;
@@ -7,11 +16,9 @@ export interface ConsoleLog {
 }
 
 /**
- * Console Runtime Provider
- *
- * REQUIRED provider that should always be included first.
- * Provides console capture, error handling, and execution lifecycle management.
- * Collects console output for retrieval by caller.
+ * 控制台运行时提供者。
+ * 覆写沙箱中的 console 方法以捕获所有输出，
+ * 管理代码执行的完成信号和错误收集。
  */
 export class ConsoleRuntimeProvider implements SandboxRuntimeProvider {
 	private logs: ConsoleLog[] = [];

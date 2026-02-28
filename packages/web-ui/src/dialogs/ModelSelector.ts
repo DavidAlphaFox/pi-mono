@@ -1,3 +1,10 @@
+/**
+ * @file ModelSelector.ts
+ * @description 模型选择对话框（<agent-model-selector>）。
+ * 展示所有可用的 LLM 模型（内置和自定义提供商），支持搜索过滤、
+ * 按推理能力/视觉能力筛选、键盘导航、自动发现本地模型等功能。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import { Badge } from "@mariozechner/mini-lit/dist/Badge.js";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
@@ -15,6 +22,10 @@ import { formatModelCost } from "../utils/format.js";
 import { i18n } from "../utils/i18n.js";
 import { discoverModels } from "../utils/model-discovery.js";
 
+/**
+ * 模型选择对话框 Web Component。
+ * 按提供商分组展示模型列表，支持搜索、过滤、键盘选择和自定义提供商发现。
+ */
 @customElement("agent-model-selector")
 export class ModelSelector extends DialogBase {
 	@state() currentModel: Model<any> | null = null;

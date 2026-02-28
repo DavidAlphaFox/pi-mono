@@ -1,3 +1,11 @@
+/**
+ * @file Messages.ts
+ * @description 核心消息组件集合。
+ * 包含 UserMessage（用户消息）、AssistantMessage（助手消息）、
+ * ToolMessage（工具调用消息）、ToolMessageDebugView（工具调试视图）、
+ * AbortedMessage（中断消息）等组件，以及 convertToLlm 消息转换工具函数。
+ */
+
 import type {
 	AssistantMessage as AssistantMessageType,
 	ImageContent,
@@ -15,6 +23,7 @@ import { i18n } from "../utils/i18n.js";
 import "./ThinkingBlock.js";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 
+/** 带附件的用户消息类型 */
 export type UserMessageWithAttachments = {
 	role: "user-with-attachments";
 	content: string | (TextContent | ImageContent)[];
@@ -22,7 +31,7 @@ export type UserMessageWithAttachments = {
 	attachments?: Attachment[];
 };
 
-// Artifact message type for session persistence
+/** 制品消息类型，用于会话持久化存储制品操作记录 */
 export interface ArtifactMessage {
 	role: "artifact";
 	action: "create" | "update" | "delete";

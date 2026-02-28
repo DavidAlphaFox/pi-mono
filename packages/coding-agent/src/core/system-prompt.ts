@@ -1,11 +1,19 @@
 /**
- * System prompt construction and project context loading
+ * 系统提示词构建模块
+ *
+ * 职责：
+ * - 构建包含工具列表、使用指南和项目上下文的系统提示词
+ * - 根据可用工具动态生成使用指南
+ * - 支持自定义系统提示词和追加内容
+ * - 附加项目上下文文件（AGENTS.md/CLAUDE.md）
+ * - 附加技能列表（XML 格式）
+ * - 包含当前日期时间和工作目录
  */
 
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.js";
 import { formatSkillsForPrompt, type Skill } from "./skills.js";
 
-/** Tool descriptions for system prompt */
+/** 系统提示词中的工具描述映射 */
 const toolDescriptions: Record<string, string> = {
 	read: "Read file contents",
 	bash: "Execute bash commands (ls, grep, find, etc.)",
@@ -16,6 +24,7 @@ const toolDescriptions: Record<string, string> = {
 	ls: "List directory contents",
 };
 
+/** 构建系统提示词的选项 */
 export interface BuildSystemPromptOptions {
 	/** Custom system prompt (replaces default). */
 	customPrompt?: string;
@@ -31,7 +40,7 @@ export interface BuildSystemPromptOptions {
 	skills?: Skill[];
 }
 
-/** Build the system prompt with tools, guidelines, and context */
+/** 构建包含工具、指南和上下文的系统提示词 */
 export function buildSystemPrompt(options: BuildSystemPromptOptions = {}): string {
 	const {
 		customPrompt,

@@ -1,11 +1,16 @@
 /**
- * GitHub Copilot OAuth flow
+ * @file GitHub Copilot OAuth 认证流程
+ *
+ * 实现 GitHub Copilot 的设备码（Device Code）OAuth 流程。
+ * 支持 GitHub.com 和 GitHub Enterprise（自定义域名）。
+ * 登录成功后自动启用所有已知模型的策略。
  */
 
 import { getModels } from "../../models.js";
 import type { Api, Model } from "../../types.js";
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from "./types.js";
 
+/** Copilot 凭据扩展类型，包含可选的企业域名 */
 type CopilotCredentials = OAuthCredentials & {
 	enterpriseUrl?: string;
 };
@@ -40,6 +45,7 @@ type DeviceTokenErrorResponse = {
 	interval?: number;
 };
 
+/** 标准化域名输入，提取主机名。无效输入返回 null */
 export function normalizeDomain(input: string): string | null {
 	const trimmed = input.trim();
 	if (!trimmed) return null;
@@ -51,6 +57,7 @@ export function normalizeDomain(input: string): string | null {
 	}
 }
 
+/** 根据域名构建 GitHub OAuth 相关的 URL 集合 */
 function getUrls(domain: string): {
 	deviceCodeUrl: string;
 	accessTokenUrl: string;
@@ -77,6 +84,7 @@ function getBaseUrlFromToken(token: string): string | null {
 	return `https://${apiHost}`;
 }
 
+/** 获取 GitHub Copilot API 的基础 URL，优先从令牌中解析 proxy-ep */
 export function getGitHubCopilotBaseUrl(token?: string, enterpriseDomain?: string): string {
 	// If we have a token, extract the base URL from proxy-ep
 	if (token) {
@@ -350,6 +358,7 @@ export async function loginGitHubCopilot(options: {
 	return credentials;
 }
 
+/** GitHub Copilot OAuth 提供商实现（适配 OAuthProviderInterface 接口） */
 export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 	id: "github-copilot",
 	name: "GitHub Copilot",

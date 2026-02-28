@@ -1,9 +1,16 @@
+/**
+ * @file ImageArtifact.ts
+ * @description 图片制品展示组件（<image-artifact>）。
+ * 显示 Base64 编码的图片，支持下载为 PNG 文件。
+ */
+
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { html, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
+/** 图片制品 Web Component，展示 Base64 图片并支持下载 */
 @customElement("image-artifact")
 export class ImageArtifact extends ArtifactElement {
 	@property({ type: String }) private _content = "";

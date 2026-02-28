@@ -1,3 +1,10 @@
+/**
+ * @file javascript-repl.ts
+ * @description JavaScript REPL 工具。
+ * 在沙箱 iframe 中执行 JavaScript 代码，支持完整的 Web API、
+ * npm 包导入、附件访问和制品存储。包含工具定义、执行逻辑和渲染器。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
@@ -12,7 +19,15 @@ import type { Attachment } from "../utils/attachment-utils.js";
 import { registerToolRenderer, renderCollapsibleHeader, renderHeader } from "./renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "./types.js";
 
-// Execute JavaScript code with attachments using SandboxedIframe
+/**
+ * 使用沙箱 iframe 执行 JavaScript 代码。
+ * 创建临时 iframe，注入运行时提供者，执行代码并收集控制台输出和生成的文件。
+ * @param code - 要执行的 JavaScript 代码
+ * @param runtimeProviders - 运行时提供者数组
+ * @param signal - 可选的中止信号
+ * @param sandboxUrlProvider - 可选的沙箱 URL 提供者
+ * @returns 执行输出和生成的文件
+ */
 export async function executeJavaScript(
 	code: string,
 	runtimeProviders: SandboxRuntimeProvider[],

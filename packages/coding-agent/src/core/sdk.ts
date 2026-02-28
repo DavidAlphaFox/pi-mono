@@ -1,3 +1,13 @@
+/**
+ * SDK 入口模块 - createAgentSession 工厂函数
+ *
+ * 职责：
+ * - 提供 createAgentSession() 作为编程式创建会话的主要入口
+ * - 处理默认参数推断（auth、模型注册、设置、会话管理器）
+ * - 从会话数据恢复模型和思考级别
+ * - 重新导出工具定义和扩展 API 类型供 SDK 用户使用
+ */
+
 import { join } from "node:path";
 import { Agent, type AgentMessage, type ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Message, Model } from "@mariozechner/pi-ai";
@@ -38,6 +48,7 @@ import {
 	writeTool,
 } from "./tools/index.js";
 
+/** 创建 AgentSession 的选项 */
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
 	cwd?: string;
@@ -71,7 +82,7 @@ export interface CreateAgentSessionOptions {
 	settingsManager?: SettingsManager;
 }
 
-/** Result from createAgentSession */
+/** createAgentSession 的返回结果 */
 export interface CreateAgentSessionResult {
 	/** The created session */
 	session: AgentSession;
@@ -128,7 +139,7 @@ function getDefaultAgentDir(): string {
 }
 
 /**
- * Create an AgentSession with the specified options.
+ * 使用指定选项创建 AgentSession
  *
  * @example
  * ```typescript

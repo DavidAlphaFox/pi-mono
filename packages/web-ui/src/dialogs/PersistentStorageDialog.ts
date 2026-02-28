@@ -1,3 +1,10 @@
+/**
+ * @file PersistentStorageDialog.ts
+ * @description 持久化存储权限请求对话框（<persistent-storage-dialog>）。
+ * 提示用户授予浏览器持久化存储权限（navigator.storage.persist），
+ * 防止浏览器在存储压力下自动清除 IndexedDB 数据。
+ */
+
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { DialogContent, DialogHeader } from "@mariozechner/mini-lit/dist/Dialog.js";
 import { DialogBase } from "@mariozechner/mini-lit/dist/DialogBase.js";
@@ -5,6 +12,10 @@ import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { i18n } from "../utils/i18n.js";
 
+/**
+ * 持久化存储对话框 Web Component。
+ * 检查是否已获得持久化权限，若未获得则弹出对话框请求用户授权。
+ */
 @customElement("persistent-storage-dialog")
 export class PersistentStorageDialog extends DialogBase {
 	@state() private requesting = false;

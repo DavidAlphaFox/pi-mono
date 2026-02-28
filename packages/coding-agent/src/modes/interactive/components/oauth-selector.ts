@@ -1,3 +1,10 @@
+/**
+ * OAuth 提供商选择器组件。
+ *
+ * 该文件提供 OAuth 认证提供商的选择界面，
+ * 显示各提供商的登录状态，支持登录和登出模式。
+ */
+
 import { getOAuthProviders, type OAuthProviderInterface } from "@mariozechner/pi-ai";
 import { Container, getEditorKeybindings, Spacer, TruncatedText } from "@mariozechner/pi-tui";
 import type { AuthStorage } from "../../../core/auth-storage.js";
@@ -5,7 +12,8 @@ import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
 /**
- * Component that renders an OAuth provider selector
+ * OAuth 提供商选择器组件。
+ * 列出所有可用的 OAuth 提供商，显示登录状态，支持选择登录或登出。
  */
 export class OAuthSelectorComponent extends Container {
 	private listContainer: Container;

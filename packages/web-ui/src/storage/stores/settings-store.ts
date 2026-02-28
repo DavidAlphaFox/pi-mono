@@ -1,8 +1,16 @@
+/**
+ * @file settings-store.ts
+ * @description 应用设置 Store。
+ * 管理主题、代理配置等应用级设置，使用字符串键值对存储。
+ * 支持变更订阅通知。
+ */
+
 import { Store } from "../store.js";
 import type { StoreConfig } from "../types.js";
 
 /**
- * Store for application settings (theme, proxy config, etc.).
+ * 设置 Store。
+ * 通用键值存储，用于保存应用设置（主题、代理 URL 等）。
  */
 export class SettingsStore extends Store {
 	getConfig(): StoreConfig {

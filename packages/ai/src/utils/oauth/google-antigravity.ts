@@ -1,9 +1,11 @@
 /**
- * Antigravity OAuth flow (Gemini 3, Claude, GPT-OSS via Google Cloud)
- * Uses different OAuth credentials than google-gemini-cli for access to additional models.
+ * @file Antigravity OAuth 认证流程
  *
- * NOTE: This module uses Node.js http.createServer for the OAuth callback.
- * It is only intended for CLI use, not browser environments.
+ * 实现 Antigravity（通过 Google Cloud 访问 Gemini 3、Claude、GPT-OSS）的 OAuth 流程。
+ * 使用与 google-gemini-cli 不同的 OAuth 凭据，可访问更多模型。
+ * 通过本地 HTTP 服务器（端口 51121）接收 OAuth 回调。
+ *
+ * 注意：此模块使用 Node.js http.createServer，仅适用于 CLI 环境。
  */
 
 import type { Server } from "node:http";
@@ -433,6 +435,7 @@ export async function loginAntigravity(
 	}
 }
 
+/** Antigravity OAuth 提供商实现（适配 OAuthProviderInterface 接口） */
 export const antigravityOAuthProvider: OAuthProviderInterface = {
 	id: "google-antigravity",
 	name: "Antigravity (Gemini 3, Claude, GPT-OSS)",

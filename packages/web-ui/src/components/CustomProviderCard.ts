@@ -1,9 +1,20 @@
+/**
+ * @file CustomProviderCard.ts
+ * @description 自定义 LLM 提供商卡片组件（<custom-provider-card>）。
+ * 以卡片形式展示自定义提供商信息，包括名称、类型、模型数量/连接状态，
+ * 以及刷新、编辑、删除操作按钮。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
 import { html, LitElement, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { CustomProvider } from "../storage/stores/custom-providers-store.js";
 
+/**
+ * 自定义提供商卡片 Web Component。
+ * 显示提供商连接状态、模型数量等信息，提供管理操作按钮。
+ */
 @customElement("custom-provider-card")
 export class CustomProviderCard extends LitElement {
 	@property({ type: Object }) provider!: CustomProvider;

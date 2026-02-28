@@ -1,9 +1,17 @@
+/**
+ * Diff 渲染工具。
+ *
+ * 该文件提供 diff 文本的彩色渲染功能，
+ * 支持行内级别（word-level）的变更高亮，
+ * 使用反色标记单行修改中的具体变更部分。
+ */
+
 import * as Diff from "diff";
 import { theme } from "../theme/theme.js";
 
 /**
- * Parse diff line to extract prefix, line number, and content.
- * Format: "+123 content" or "-123 content" or " 123 content" or "     ..."
+ * 解析 diff 行以提取前缀、行号和内容。
+ * 格式："+123 content" 或 "-123 content" 或 " 123 content" 或 "     ..."
  */
 function parseDiffLine(line: string): { prefix: string; lineNum: string; content: string } | null {
 	const match = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
@@ -12,16 +20,16 @@ function parseDiffLine(line: string): { prefix: string; lineNum: string; content
 }
 
 /**
- * Replace tabs with spaces for consistent rendering.
+ * 将制表符替换为空格以保持一致的渲染效果。
  */
 function replaceTabs(text: string): string {
 	return text.replace(/\t/g, "   ");
 }
 
 /**
- * Compute word-level diff and render with inverse on changed parts.
- * Uses diffWords which groups whitespace with adjacent words for cleaner highlighting.
- * Strips leading whitespace from inverse to avoid highlighting indentation.
+ * 计算词级 diff 并使用反色渲染变更部分。
+ * 使用 diffWords 算法将空格与相邻单词分组以获得更清晰的高亮效果。
+ * 去除反色部分的前导空格以避免高亮缩进。
  */
 function renderIntraLineDiff(oldContent: string, newContent: string): { removedLine: string; addedLine: string } {
 	const wordDiff = Diff.diffWords(oldContent, newContent);
@@ -65,16 +73,20 @@ function renderIntraLineDiff(oldContent: string, newContent: string): { removedL
 	return { removedLine, addedLine };
 }
 
+/** Diff 渲染选项 */
 export interface RenderDiffOptions {
-	/** File path (unused, kept for API compatibility) */
+	/** 文件路径（未使用，保留用于 API 兼容性） */
 	filePath?: string;
 }
 
 /**
- * Render a diff string with colored lines and intra-line change highlighting.
- * - Context lines: dim/gray
- * - Removed lines: red, with inverse on changed tokens
- * - Added lines: green, with inverse on changed tokens
+ * 渲染 diff 字符串，使用彩色行和行内变更高亮。
+ * - 上下文行：暗灰色
+ * - 删除行：红色，变更 token 使用反色
+ * - 新增行：绿色，变更 token 使用反色
+ *
+ * 当恰好有一行删除和一行新增时（表示单行修改），
+ * 执行行内 diff 以高亮具体的变更部分。
  */
 export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): string {
 	const lines = diffText.split("\n");

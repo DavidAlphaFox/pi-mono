@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+/**
+ * @file CLI 入口文件 - GPU Pod 管理工具的主命令行界面
+ *
+ * 本文件是 `pi` CLI 工具的入口点，负责：
+ * - 解析命令行参数并分发到对应的子命令处理器
+ * - 管理 Pod（setup、list、active、remove）
+ * - 管理模型（start、stop、list、logs）
+ * - 提供 SSH/Shell 连接功能
+ * - 提供 Agent 交互式聊天功能
+ */
 import chalk from "chalk";
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
@@ -10,11 +20,18 @@ import { promptModel } from "./commands/prompt.js";
 import { getActivePod, loadConfig } from "./config.js";
 import { sshExecStream } from "./ssh.js";
 
+/** 当前文件的绝对路径 */
 const __filename = fileURLToPath(import.meta.url);
+/** 当前文件所在目录的绝对路径 */
 const __dirname = dirname(__filename);
 
+/** 从 package.json 中读取版本信息 */
 const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
+/**
+ * 打印帮助信息
+ * 显示所有可用命令及其用法说明
+ */
 function printHelp() {
 	console.log(`pi v${packageJson.version} - Manage vLLM deployments on GPU pods
 
@@ -53,31 +70,35 @@ Environment:
   PI_CONFIG_DIR    Config directory (default: ~/.pi)`);
 }
 
-// Parse command line arguments
+// 解析命令行参数，去掉 node 和脚本路径
 const args = process.argv.slice(2);
 
+// 无参数或请求帮助时，显示帮助信息并退出
 if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
 	printHelp();
 	process.exit(0);
 }
 
+// 显示版本号
 if (args[0] === "--version" || args[0] === "-v") {
 	console.log(packageJson.version);
 	process.exit(0);
 }
 
+/** 主命令（如 pods、start、stop 等） */
 const command = args[0];
+/** 子命令（如 setup、active、remove 等） */
 const subcommand = args[1];
 
-// Main command handler
+// 主命令处理逻辑
 try {
-	// Handle "pi pods" commands
+	// 处理 "pi pods" 相关的 Pod 管理命令
 	if (command === "pods") {
 		if (!subcommand) {
-			// pi pods - list all pods
+			// pi pods - 列出所有已配置的 Pod
 			listPods();
 		} else if (subcommand === "setup") {
-			// pi pods setup <name> "<ssh>" [--mount "<mount>"] [--models-path <path>] [--vllm release|nightly|gpt-oss]
+			// pi pods setup <name> "<ssh>" - 初始化配置一个新的 Pod
 			const name = args[2];
 			const sshCmd = args[3];
 
@@ -88,7 +109,7 @@ try {
 				process.exit(1);
 			}
 
-			// Parse options
+			// 解析可选参数：挂载命令、模型路径、vLLM 版本
 			const options: { mount?: string; modelsPath?: string; vllm?: "release" | "nightly" | "gpt-oss" } = {};
 			for (let i = 4; i < args.length; i++) {
 				if (args[i] === "--mount" && i + 1 < args.length) {
@@ -110,9 +131,9 @@ try {
 				}
 			}
 
-			// If --mount provided but no --models-path, try to extract path from mount command
+			// 如果提供了 --mount 但没有 --models-path，尝试从挂载命令中提取路径
 			if (options.mount && !options.modelsPath) {
-				// Extract last part of mount command as models path
+				// 提取挂载命令的最后一部分作为模型路径
 				const parts = options.mount.trim().split(" ");
 				const lastPart = parts[parts.length - 1];
 				if (lastPart?.startsWith("/")) {
@@ -122,7 +143,7 @@ try {
 
 			await setupPod(name, sshCmd, options);
 		} else if (subcommand === "active") {
-			// pi pods active <name>
+			// pi pods active <name> - 切换当前活跃 Pod
 			const name = args[2];
 			if (!name) {
 				console.error("Usage: pi pods active <name>");
@@ -130,7 +151,7 @@ try {
 			}
 			switchActivePod(name);
 		} else if (subcommand === "remove") {
-			// pi pods remove <name>
+			// pi pods remove <name> - 从本地配置中移除 Pod
 			const name = args[2];
 			if (!name) {
 				console.error("Usage: pi pods remove <name>");
@@ -142,22 +163,23 @@ try {
 			process.exit(1);
 		}
 	} else {
-		// Parse --pod override for model commands
+		// 解析 --pod 参数，用于覆盖默认的活跃 Pod
 		let podOverride: string | undefined;
 		const podIndex = args.indexOf("--pod");
 		if (podIndex !== -1 && podIndex + 1 < args.length) {
 			podOverride = args[podIndex + 1];
-			// Remove --pod and its value from args
+			// 从参数列表中移除 --pod 及其值
 			args.splice(podIndex, 2);
 		}
 
-		// Handle SSH/shell commands and model commands
+		// 处理 SSH/Shell 命令和模型管理命令
 		switch (command) {
 			case "shell": {
-				// pi shell [<name>] - open interactive shell
+				// pi shell [<name>] - 打开 Pod 的交互式 Shell
 				const podName = args[1];
 				let podInfo: { name: string; pod: import("./types.js").Pod } | null = null;
 
+				// 如果指定了 Pod 名称则使用指定的，否则使用活跃 Pod
 				if (podName) {
 					const config = loadConfig();
 					const pod = config.pods[podName];
@@ -179,8 +201,8 @@ try {
 
 				console.log(chalk.green(`Connecting to pod '${podInfo.name}'...`));
 
-				// Execute SSH in interactive mode
-				const sshArgs = podInfo.pod.ssh.split(" ").slice(1); // Remove 'ssh' from command
+				// 以交互模式启动 SSH 连接
+				const sshArgs = podInfo.pod.ssh.split(" ").slice(1); // 去掉 'ssh' 命令本身
 				const sshProcess = spawn("ssh", sshArgs, {
 					stdio: "inherit",
 					env: process.env,
@@ -192,15 +214,15 @@ try {
 				break;
 			}
 			case "ssh": {
-				// pi ssh [<name>] "<command>" - run command via SSH
+				// pi ssh [<name>] "<command>" - 在 Pod 上远程执行命令
 				let podName: string | undefined;
 				let sshCommand: string;
 
 				if (args.length === 2) {
-					// pi ssh "<command>" - use active pod
+					// pi ssh "<command>" - 在活跃 Pod 上执行
 					sshCommand = args[1];
 				} else if (args.length === 3) {
-					// pi ssh <name> "<command>"
+					// pi ssh <name> "<command>" - 在指定 Pod 上执行
 					podName = args[1];
 					sshCommand = args[2];
 				} else {
@@ -231,30 +253,31 @@ try {
 
 				console.log(chalk.gray(`Running on pod '${podInfo.name}': ${sshCommand}`));
 
-				// Execute command and stream output
+				// 执行命令并将输出流式传输到控制台
 				const exitCode = await sshExecStream(podInfo.pod.ssh, sshCommand);
 				process.exit(exitCode);
 				break;
 			}
 			case "start": {
-				// pi start <model> --name <name> [options]
+				// pi start <model> --name <name> [options] - 启动模型
 				const modelId = args[1];
 				if (!modelId) {
-					// Show available models
+					// 未指定模型时，显示可用模型列表
 					await showKnownModels();
 					process.exit(0);
 				}
 
-				// Parse options
+				// 解析模型启动选项
 				let name: string | undefined;
 				let memory: string | undefined;
 				let context: string | undefined;
 				let gpus: number | undefined;
 				const vllmArgs: string[] = [];
-				let inVllmArgs = false;
+				let inVllmArgs = false; // 标记是否进入 --vllm 自定义参数模式
 
 				for (let i = 2; i < args.length; i++) {
 					if (inVllmArgs) {
+						// --vllm 之后的所有参数都直接传递给 vLLM
 						vllmArgs.push(args[i]);
 					} else if (args[i] === "--name" && i + 1 < args.length) {
 						name = args[i + 1];
@@ -282,7 +305,7 @@ try {
 					process.exit(1);
 				}
 
-				// Warn if --vllm is used with other parameters
+				// 当 --vllm 与其他参数同时使用时发出警告
 				if (vllmArgs.length > 0 && (memory || context || gpus)) {
 					console.log(
 						chalk.yellow("⚠ Warning: --memory, --context, and --gpus are ignored when --vllm is specified"),
@@ -301,10 +324,9 @@ try {
 				break;
 			}
 			case "stop": {
-				// pi stop [name] - stop specific model or all models
+				// pi stop [name] - 停止指定模型，或不指定名称时停止所有模型
 				const name = args[1];
 				if (!name) {
-					// Stop all models on the active pod
 					await stopAllModels({ pod: podOverride });
 				} else {
 					await stopModel(name, { pod: podOverride });
@@ -312,11 +334,11 @@ try {
 				break;
 			}
 			case "list":
-				// pi list
+				// pi list - 列出当前 Pod 上运行中的所有模型
 				await listModels({ pod: podOverride });
 				break;
 			case "logs": {
-				// pi logs <name>
+				// pi logs <name> - 流式查看指定模型的日志
 				const name = args[1];
 				if (!name) {
 					console.error("Usage: pi logs <name>");
@@ -326,7 +348,7 @@ try {
 				break;
 			}
 			case "agent": {
-				// pi agent <name> [messages...] [options]
+				// pi agent <name> [messages...] [options] - 使用 Agent 与模型进行对话
 				const name = args[1];
 				if (!name) {
 					console.error("Usage: pi agent <name> [messages...] [options]");
@@ -335,15 +357,15 @@ try {
 
 				const apiKey = process.env.PI_API_KEY;
 
-				// Pass all args after the model name
+				// 将模型名称之后的所有参数传递给 Agent
 				const agentArgs = args.slice(2);
 
-				// If no messages provided, it's interactive mode
+				// 调用 Agent 进行交互（无消息参数时进入交互式模式）
 				await promptModel(name, agentArgs, {
 					pod: podOverride,
 					apiKey,
 				}).catch(() => {
-					// Error already handled in promptModel, just exit cleanly
+					// 错误已在 promptModel 中处理，此处直接退出
 					process.exit(0);
 				});
 				break;

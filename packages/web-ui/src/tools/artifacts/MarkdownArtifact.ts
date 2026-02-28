@@ -1,3 +1,10 @@
+/**
+ * @file MarkdownArtifact.ts
+ * @description Markdown 制品展示组件（<markdown-artifact>）。
+ * 支持预览（渲染 Markdown）和代码查看（语法高亮源码）两种模式，
+ * 提供复制和下载功能。
+ */
+
 import hljs from "highlight.js";
 import { html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -9,6 +16,7 @@ import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { PreviewCodeToggle } from "@mariozechner/mini-lit/dist/PreviewCodeToggle.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
+/** Markdown 制品 Web Component，支持预览和代码查看切换 */
 @customElement("markdown-artifact")
 export class MarkdownArtifact extends ArtifactElement {
 	@property() override filename = "";

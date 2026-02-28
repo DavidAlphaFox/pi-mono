@@ -1,48 +1,47 @@
 /**
- * Keyboard input handling for terminal applications.
+ * @file 终端应用的键盘输入处理模块
  *
- * Supports both legacy terminal sequences and Kitty keyboard protocol.
- * See: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
- * Reference: https://github.com/sst/opentui/blob/7da92b4088aebfe27b9f691c04163a48821e49fd/packages/core/src/lib/parse.keypress.ts
+ * 同时支持传统终端转义序列和 Kitty 键盘协议。
+ * 参考：https://sw.kovidgoyal.net/kitty/keyboard-protocol/
  *
- * Symbol keys are also supported, however some ctrl+symbol combos
- * overlap with ASCII codes, e.g. ctrl+[ = ESC.
- * See: https://sw.kovidgoyal.net/kitty/keyboard-protocol/#legacy-ctrl-mapping-of-ascii-keys
- * Those can still be * used for ctrl+shift combos
+ * 符号键也受支持，但某些 ctrl+符号组合与 ASCII 码重叠，
+ * 例如 ctrl+[ = ESC。这些仍可用于 ctrl+shift 组合键。
+ * 参考：https://sw.kovidgoyal.net/kitty/keyboard-protocol/#legacy-ctrl-mapping-of-ascii-keys
  *
- * API:
- * - matchesKey(data, keyId) - Check if input matches a key identifier
- * - parseKey(data) - Parse input and return the key identifier
- * - Key - Helper object for creating typed key identifiers
- * - setKittyProtocolActive(active) - Set global Kitty protocol state
- * - isKittyProtocolActive() - Query global Kitty protocol state
+ * 主要 API：
+ * - matchesKey(data, keyId) - 检查输入是否匹配指定的按键标识符
+ * - parseKey(data) - 解析输入并返回按键标识符
+ * - Key - 用于创建类型安全的按键标识符的辅助对象
+ * - setKittyProtocolActive(active) - 设置全局 Kitty 协议状态
+ * - isKittyProtocolActive() - 查询全局 Kitty 协议状态
  */
 
 // =============================================================================
-// Global Kitty Protocol State
+// 全局 Kitty 协议状态
 // =============================================================================
 
 let _kittyProtocolActive = false;
 
 /**
- * Set the global Kitty keyboard protocol state.
- * Called by ProcessTerminal after detecting protocol support.
+ * 设置全局 Kitty 键盘协议状态。
+ * 在 ProcessTerminal 检测到协议支持后调用。
  */
 export function setKittyProtocolActive(active: boolean): void {
 	_kittyProtocolActive = active;
 }
 
 /**
- * Query whether Kitty keyboard protocol is currently active.
+ * 查询 Kitty 键盘协议当前是否处于活跃状态。
  */
 export function isKittyProtocolActive(): boolean {
 	return _kittyProtocolActive;
 }
 
 // =============================================================================
-// Type-Safe Key Identifiers
+// 类型安全的按键标识符
 // =============================================================================
 
+/** 字母键类型（a-z） */
 type Letter =
 	| "a"
 	| "b"
@@ -71,6 +70,7 @@ type Letter =
 	| "y"
 	| "z";
 
+/** 符号键类型 */
 type SymbolKey =
 	| "`"
 	| "-"
@@ -104,6 +104,7 @@ type SymbolKey =
 	| ">"
 	| "?";
 
+/** 特殊键类型（方向键、功能键、控制键等） */
 type SpecialKey =
 	| "escape"
 	| "esc"
@@ -136,11 +137,12 @@ type SpecialKey =
 	| "f11"
 	| "f12";
 
+/** 基础按键类型 = 字母 | 符号 | 特殊键 */
 type BaseKey = Letter | SymbolKey | SpecialKey;
 
 /**
- * Union type of all valid key identifiers.
- * Provides autocomplete and catches typos at compile time.
+ * 所有有效按键标识符的联合类型。
+ * 提供自动补全并在编译时捕获拼写错误。
  */
 export type KeyId =
 	| BaseKey
@@ -161,13 +163,13 @@ export type KeyId =
 	| `alt+shift+ctrl+${BaseKey}`;
 
 /**
- * Helper object for creating typed key identifiers with autocomplete.
+ * 用于创建类型安全按键标识符的辅助对象（带自动补全）。
  *
- * Usage:
- * - Key.escape, Key.enter, Key.tab, etc. for special keys
- * - Key.backtick, Key.comma, Key.period, etc. for symbol keys
- * - Key.ctrl("c"), Key.alt("x") for single modifier
- * - Key.ctrlShift("p"), Key.ctrlAlt("x") for combined modifiers
+ * 使用方式：
+ * - Key.escape、Key.enter、Key.tab 等用于特殊键
+ * - Key.backtick、Key.comma、Key.period 等用于符号键
+ * - Key.ctrl("c")、Key.alt("x") 用于单修饰键
+ * - Key.ctrlShift("p")、Key.ctrlAlt("x") 用于组合修饰键
  */
 export const Key = {
 	// Special keys
@@ -253,9 +255,10 @@ export const Key = {
 } as const;
 
 // =============================================================================
-// Constants
+// 常量定义
 // =============================================================================
 
+/** 符号键字符集合 */
 const SYMBOL_KEYS = new Set([
 	"`",
 	"-",
@@ -290,14 +293,17 @@ const SYMBOL_KEYS = new Set([
 	"?",
 ]);
 
+/** 修饰键位掩码 */
 const MODIFIERS = {
 	shift: 1,
 	alt: 2,
 	ctrl: 4,
 } as const;
 
-const LOCK_MASK = 64 + 128; // Caps Lock + Num Lock
+/** 锁定键掩码（Caps Lock + Num Lock），在匹配时需要忽略 */
+const LOCK_MASK = 64 + 128;
 
+/** 特殊键的 Unicode 码位映射 */
 const CODEPOINTS = {
 	escape: 27,
 	tab: 9,
@@ -453,20 +459,26 @@ const matchesLegacyModifierSequence = (data: string, key: LegacyModifierKey, mod
 };
 
 // =============================================================================
-// Kitty Protocol Parsing
+// Kitty 协议解析
 // =============================================================================
 
 /**
- * Event types from Kitty keyboard protocol (flag 2)
- * 1 = key press, 2 = key repeat, 3 = key release
+ * Kitty 键盘协议的事件类型（标志 2）
+ * 1 = 按下，2 = 重复，3 = 释放
  */
 export type KeyEventType = "press" | "repeat" | "release";
 
+/** 解析后的 Kitty 协议序列 */
 interface ParsedKittySequence {
+	/** 按键的 Unicode 码位 */
 	codepoint: number;
-	shiftedKey?: number; // Shifted version of the key (when shift is pressed)
-	baseLayoutKey?: number; // Key in standard PC-101 layout (for non-Latin layouts)
+	/** Shift 版本的按键（按下 Shift 时） */
+	shiftedKey?: number;
+	/** 标准 PC-101 布局中的按键（用于非拉丁键盘布局） */
+	baseLayoutKey?: number;
+	/** 修饰键位掩码 */
 	modifier: number;
+	/** 事件类型（按下/重复/释放） */
 	eventType: KeyEventType;
 }
 
@@ -474,8 +486,8 @@ interface ParsedKittySequence {
 let _lastEventType: KeyEventType = "press";
 
 /**
- * Check if the last parsed key event was a key release.
- * Only meaningful when Kitty keyboard protocol with flag 2 is active.
+ * 检查输入数据是否为按键释放事件。
+ * 仅在启用了标志 2 的 Kitty 键盘协议时有意义。
  */
 export function isKeyRelease(data: string): boolean {
 	// Don't treat bracketed paste content as key release, even if it contains
@@ -504,8 +516,8 @@ export function isKeyRelease(data: string): boolean {
 }
 
 /**
- * Check if the last parsed key event was a key repeat.
- * Only meaningful when Kitty keyboard protocol with flag 2 is active.
+ * 检查输入数据是否为按键重复事件。
+ * 仅在启用了标志 2 的 Kitty 键盘协议时有意义。
  */
 export function isKeyRepeat(data: string): boolean {
 	// Don't treat bracketed paste content as key repeat, even if it contains
@@ -653,7 +665,7 @@ function matchesModifyOtherKeys(data: string, expectedKeycode: number, expectedM
 }
 
 // =============================================================================
-// Generic Key Matching
+// 通用按键匹配
 // =============================================================================
 
 /**
@@ -691,20 +703,20 @@ function parseKeyId(keyId: string): { key: string; ctrl: boolean; shift: boolean
 }
 
 /**
- * Match input data against a key identifier string.
+ * 将输入数据与按键标识符字符串进行匹配。
  *
- * Supported key identifiers:
- * - Single keys: "escape", "tab", "enter", "backspace", "delete", "home", "end", "space"
- * - Arrow keys: "up", "down", "left", "right"
- * - Ctrl combinations: "ctrl+c", "ctrl+z", etc.
- * - Shift combinations: "shift+tab", "shift+enter"
- * - Alt combinations: "alt+enter", "alt+backspace"
- * - Combined modifiers: "shift+ctrl+p", "ctrl+alt+x"
+ * 支持的按键标识符：
+ * - 单键："escape"、"tab"、"enter"、"backspace"、"delete"、"home"、"end"、"space"
+ * - 方向键："up"、"down"、"left"、"right"
+ * - Ctrl 组合："ctrl+c"、"ctrl+z" 等
+ * - Shift 组合："shift+tab"、"shift+enter"
+ * - Alt 组合："alt+enter"、"alt+backspace"
+ * - 组合修饰键："shift+ctrl+p"、"ctrl+alt+x"
  *
- * Use the Key helper for autocomplete: Key.ctrl("c"), Key.escape, Key.ctrlShift("p")
+ * 使用 Key 辅助对象获取自动补全：Key.ctrl("c")、Key.escape、Key.ctrlShift("p")
  *
- * @param data - Raw input data from terminal
- * @param keyId - Key identifier (e.g., "ctrl+c", "escape", Key.ctrl("c"))
+ * @param data - 来自终端的原始输入数据
+ * @param keyId - 按键标识符（如 "ctrl+c"、"escape"、Key.ctrl("c")）
  */
 export function matchesKey(data: string, keyId: KeyId): boolean {
 	const parsed = parseKeyId(keyId);
@@ -1037,10 +1049,10 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 }
 
 /**
- * Parse input data and return the key identifier if recognized.
+ * 解析输入数据并返回识别到的按键标识符。
  *
- * @param data - Raw input data from terminal
- * @returns Key identifier string (e.g., "ctrl+c") or undefined
+ * @param data - 来自终端的原始输入数据
+ * @returns 按键标识符字符串（如 "ctrl+c"），未识别则返回 undefined
  */
 export function parseKey(data: string): string | undefined {
 	const kitty = parseKittySequence(data);

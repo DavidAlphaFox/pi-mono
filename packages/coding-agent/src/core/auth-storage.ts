@@ -1,9 +1,11 @@
 /**
- * Credential storage for API keys and OAuth tokens.
- * Handles loading, saving, and refreshing credentials from auth.json.
+ * 凭证存储模块 - 管理 API 密钥和 OAuth 令牌
  *
- * Uses file locking to prevent race conditions when multiple pi instances
- * try to refresh tokens simultaneously.
+ * 职责：
+ * - 从 auth.json 加载、保存和刷新凭证
+ * - 使用文件锁防止多个 pi 实例同时刷新令牌时的竞态条件
+ * - 支持多种凭证来源：运行时覆盖（CLI）、auth.json、环境变量、自定义解析器
+ * - 处理 OAuth 令牌自动刷新和过期检测
  */
 
 import {
@@ -21,17 +23,21 @@ import lockfile from "proper-lockfile";
 import { getAgentDir } from "../config.js";
 import { resolveConfigValue } from "./resolve-config-value.js";
 
+/** API 密钥凭证 */
 export type ApiKeyCredential = {
 	type: "api_key";
 	key: string;
 };
 
+/** OAuth 凭证（包含访问令牌、刷新令牌和过期时间） */
 export type OAuthCredential = {
 	type: "oauth";
 } & OAuthCredentials;
 
+/** 认证凭证联合类型 */
 export type AuthCredential = ApiKeyCredential | OAuthCredential;
 
+/** 认证存储数据 - 提供商名称到凭证的映射 */
 export type AuthStorageData = Record<string, AuthCredential>;
 
 type LockResult<T> = {
@@ -39,11 +45,13 @@ type LockResult<T> = {
 	next?: string;
 };
 
+/** 认证存储后端接口 - 提供带锁的读写操作 */
 export interface AuthStorageBackend {
 	withLock<T>(fn: (current: string | undefined) => LockResult<T>): T;
 	withLockAsync<T>(fn: (current: string | undefined) => Promise<LockResult<T>>): Promise<T>;
 }
 
+/** 基于文件的认证存储后端 - 使用文件锁保证并发安全 */
 export class FileAuthStorageBackend implements AuthStorageBackend {
 	constructor(private authPath: string = join(getAgentDir(), "auth.json")) {}
 
@@ -133,6 +141,7 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 	}
 }
 
+/** 内存认证存储后端 - 用于测试 */
 export class InMemoryAuthStorageBackend implements AuthStorageBackend {
 	private value: string | undefined;
 
@@ -154,7 +163,14 @@ export class InMemoryAuthStorageBackend implements AuthStorageBackend {
 }
 
 /**
- * Credential storage backed by a JSON file.
+ * 凭证存储管理器
+ *
+ * API key 获取优先级：
+ * 1. 运行时覆盖（CLI --api-key）
+ * 2. auth.json 中的 API key
+ * 3. auth.json 中的 OAuth 令牌（自动带锁刷新）
+ * 4. 环境变量
+ * 5. 降级解析器（models.json 自定义提供商）
  */
 export class AuthStorage {
 	private data: AuthStorageData = {};

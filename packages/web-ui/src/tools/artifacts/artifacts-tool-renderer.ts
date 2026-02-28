@@ -1,3 +1,10 @@
+/**
+ * @file artifacts-tool-renderer.ts
+ * @description 制品工具的自定义渲染器。
+ * 根据制品操作类型（create/update/rewrite/delete/get/htmlArtifactLogs）
+ * 提供不同的可视化展示，包括文件名标签、diff 视图、代码块等。
+ */
+
 import "@mariozechner/mini-lit/dist/CodeBlock.js";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { createRef, ref } from "lit/directives/ref.js";
@@ -11,7 +18,7 @@ import type { ToolRenderer, ToolRenderResult } from "../types.js";
 import { ArtifactPill } from "./ArtifactPill.js";
 import type { ArtifactsPanel, ArtifactsParams } from "./artifacts.js";
 
-// Helper to extract text from content blocks
+// 从内容块中提取文本的辅助函数
 function getTextOutput(result: ToolResultMessage<any> | undefined): string {
 	if (!result) return "";
 	return (
@@ -22,7 +29,7 @@ function getTextOutput(result: ToolResultMessage<any> | undefined): string {
 	);
 }
 
-// Helper to determine language for syntax highlighting
+// 根据文件扩展名确定语法高亮语言的辅助函数
 function getLanguageFromFilename(filename?: string): string {
 	if (!filename) return "text";
 	const ext = filename.split(".").pop()?.toLowerCase();

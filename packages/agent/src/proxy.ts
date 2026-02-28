@@ -1,9 +1,20 @@
 /**
- * Proxy stream function for apps that route LLM calls through a server.
- * The server manages auth and proxies requests to LLM providers.
+ * @file 代理流式调用函数
+ *
+ * 本文件实现了通过中间代理服务器转发 LLM 请求的流式函数。
+ * 服务器负责管理认证并将请求代理到 LLM 提供商。
+ *
+ * 代理协议设计：
+ * - 使用 SSE（Server-Sent Events）格式传输流式数据
+ * - 服务器端剥离 delta 事件中的 partial 字段以减少带宽消耗
+ * - 客户端根据接收到的事件重建完整的部分消息
+ *
+ * 使用方式：
+ * 将 streamProxy 作为 Agent 的 streamFn 选项传入，
+ * 即可让所有 LLM 调用通过代理服务器进行。
  */
 
-// Internal import for JSON parsing utility
+// 导入 JSON 流式解析工具和相关类型
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
@@ -16,7 +27,12 @@ import {
 	type ToolCall,
 } from "@mariozechner/pi-ai";
 
-// Create stream class matching ProxyMessageEventStream
+/**
+ * 代理消息事件流
+ *
+ * 继承自 EventStream，专门用于处理代理服务器返回的助手消息事件。
+ * 当收到 done 或 error 事件时终止流。
+ */
 class ProxyMessageEventStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
@@ -31,7 +47,11 @@ class ProxyMessageEventStream extends EventStream<AssistantMessageEvent, Assista
 }
 
 /**
- * Proxy event types - server sends these with partial field stripped to reduce bandwidth.
+ * 代理事件类型
+ *
+ * 服务器端发送的事件格式，相比标准的 AssistantMessageEvent，
+ * 剥离了 partial 字段以减少网络带宽消耗。
+ * 客户端需要根据这些事件在本地重建 partial 消息。
  */
 export type ProxyAssistantMessageEvent =
 	| { type: "start" }
@@ -56,19 +76,27 @@ export type ProxyAssistantMessageEvent =
 			usage: AssistantMessage["usage"];
 	  };
 
+/**
+ * 代理流式调用选项
+ *
+ * 继承自 SimpleStreamOptions，额外要求提供代理服务器的
+ * 认证令牌和服务器地址。
+ */
 export interface ProxyStreamOptions extends SimpleStreamOptions {
-	/** Auth token for the proxy server */
+	/** 代理服务器的认证令牌 */
 	authToken: string;
-	/** Proxy server URL (e.g., "https://genai.example.com") */
+	/** 代理服务器 URL（例如 "https://genai.example.com"） */
 	proxyUrl: string;
 }
 
 /**
- * Stream function that proxies through a server instead of calling LLM providers directly.
- * The server strips the partial field from delta events to reduce bandwidth.
- * We reconstruct the partial message client-side.
+ * 代理流式调用函数
  *
- * Use this as the `streamFn` option when creating an Agent that needs to go through a proxy.
+ * 通过代理服务器而非直接调用 LLM 提供商进行流式调用。
+ * 服务器剥离 delta 事件中的 partial 字段以减少带宽，
+ * 客户端在本地重建完整的部分消息。
+ *
+ * 用作创建 Agent 时的 `streamFn` 选项。
  *
  * @example
  * ```typescript
@@ -81,12 +109,17 @@ export interface ProxyStreamOptions extends SimpleStreamOptions {
  *     }),
  * });
  * ```
+ *
+ * @param model - LLM 模型配置
+ * @param context - LLM 上下文（系统提示词、消息、工具）
+ * @param options - 代理流式调用选项（包含认证和服务器地址）
+ * @returns 代理消息事件流
  */
 export function streamProxy(model: Model<any>, context: Context, options: ProxyStreamOptions): ProxyMessageEventStream {
 	const stream = new ProxyMessageEventStream();
 
 	(async () => {
-		// Initialize the partial message that we'll build up from events
+		// 初始化部分消息，后续会根据事件逐步填充
 		const partial: AssistantMessage = {
 			role: "assistant",
 			stopReason: "stop",
@@ -107,6 +140,7 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 
 		let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
+		// 中止处理器：当信号触发时取消读取器
 		const abortHandler = () => {
 			if (reader) {
 				reader.cancel("Request aborted by user").catch(() => {});
@@ -118,6 +152,7 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 		}
 
 		try {
+			// 向代理服务器发送 POST 请求
 			const response = await fetch(`${options.proxyUrl}/api/stream`, {
 				method: "POST",
 				headers: {
@@ -136,6 +171,7 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 				signal: options.signal,
 			});
 
+			// 处理 HTTP 错误响应
 			if (!response.ok) {
 				let errorMessage = `Proxy error: ${response.status} ${response.statusText}`;
 				try {
@@ -144,11 +180,12 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 						errorMessage = `Proxy error: ${errorData.error}`;
 					}
 				} catch {
-					// Couldn't parse error response
+					// 无法解析错误响应体
 				}
 				throw new Error(errorMessage);
 			}
 
+			// 开始读取 SSE 响应流
 			reader = response.body!.getReader();
 			const decoder = new TextDecoder();
 			let buffer = "";
@@ -157,19 +194,24 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 				const { done, value } = await reader.read();
 				if (done) break;
 
+				// 检查是否已被中止
 				if (options.signal?.aborted) {
 					throw new Error("Request aborted by user");
 				}
 
+				// 将字节流解码并按行分割处理
 				buffer += decoder.decode(value, { stream: true });
 				const lines = buffer.split("\n");
+				// 最后一行可能不完整，保留到下次处理
 				buffer = lines.pop() || "";
 
+				// 解析 SSE 格式的事件数据
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
 						const data = line.slice(6).trim();
 						if (data) {
 							const proxyEvent = JSON.parse(data) as ProxyAssistantMessageEvent;
+							// 处理代理事件并重建部分消息
 							const event = processProxyEvent(proxyEvent, partial);
 							if (event) {
 								stream.push(event);
@@ -179,12 +221,14 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 				}
 			}
 
+			// 流读取完成后再次检查中止状态
 			if (options.signal?.aborted) {
 				throw new Error("Request aborted by user");
 			}
 
 			stream.end();
 		} catch (error) {
+			// 错误处理：构建错误事件并关闭流
 			const errorMessage = error instanceof Error ? error.message : String(error);
 			const reason = options.signal?.aborted ? "aborted" : "error";
 			partial.stopReason = reason;
@@ -196,6 +240,7 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 			});
 			stream.end();
 		} finally {
+			// 清理中止监听器
 			if (options.signal) {
 				options.signal.removeEventListener("abort", abortHandler);
 			}
@@ -206,7 +251,20 @@ export function streamProxy(model: Model<any>, context: Context, options: ProxyS
 }
 
 /**
- * Process a proxy event and update the partial message.
+ * 处理代理事件并更新部分消息
+ *
+ * 将代理服务器发送的精简事件转换为标准的 AssistantMessageEvent，
+ * 同时在本地重建完整的 partial 消息。
+ *
+ * 处理逻辑按内容类型分类：
+ * - text_*: 文本内容的开始、增量更新和结束
+ * - thinking_*: 思考/推理内容的开始、增量更新和结束
+ * - toolcall_*: 工具调用的开始、JSON 参数增量和结束
+ * - done/error: 流的正常结束或错误终止
+ *
+ * @param proxyEvent - 代理服务器发送的事件
+ * @param partial - 正在构建的部分消息（会被就地修改）
+ * @returns 转换后的标准助手消息事件，如果事件无法处理则返回 undefined
  */
 function processProxyEvent(
 	proxyEvent: ProxyAssistantMessageEvent,
@@ -217,10 +275,12 @@ function processProxyEvent(
 			return { type: "start", partial };
 
 		case "text_start":
+			// 在指定位置初始化空文本内容块
 			partial.content[proxyEvent.contentIndex] = { type: "text", text: "" };
 			return { type: "text_start", contentIndex: proxyEvent.contentIndex, partial };
 
 		case "text_delta": {
+			// 追加文本增量
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "text") {
 				content.text += proxyEvent.delta;
@@ -235,6 +295,7 @@ function processProxyEvent(
 		}
 
 		case "text_end": {
+			// 设置文本签名（用于内容验证）
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "text") {
 				content.textSignature = proxyEvent.contentSignature;
@@ -249,10 +310,12 @@ function processProxyEvent(
 		}
 
 		case "thinking_start":
+			// 在指定位置初始化空思考内容块
 			partial.content[proxyEvent.contentIndex] = { type: "thinking", thinking: "" };
 			return { type: "thinking_start", contentIndex: proxyEvent.contentIndex, partial };
 
 		case "thinking_delta": {
+			// 追加思考内容增量
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "thinking") {
 				content.thinking += proxyEvent.delta;
@@ -267,6 +330,7 @@ function processProxyEvent(
 		}
 
 		case "thinking_end": {
+			// 设置思考签名（用于内容验证）
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "thinking") {
 				content.thinkingSignature = proxyEvent.contentSignature;
@@ -281,6 +345,7 @@ function processProxyEvent(
 		}
 
 		case "toolcall_start":
+			// 初始化工具调用内容块，包含 partialJson 用于流式 JSON 解析
 			partial.content[proxyEvent.contentIndex] = {
 				type: "toolCall",
 				id: proxyEvent.id,
@@ -291,11 +356,14 @@ function processProxyEvent(
 			return { type: "toolcall_start", contentIndex: proxyEvent.contentIndex, partial };
 
 		case "toolcall_delta": {
+			// 追加 JSON 参数增量并尝试流式解析
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "toolCall") {
 				(content as any).partialJson += proxyEvent.delta;
+				// 使用流式 JSON 解析器尝试从不完整的 JSON 中提取参数
 				content.arguments = parseStreamingJson((content as any).partialJson) || {};
-				partial.content[proxyEvent.contentIndex] = { ...content }; // Trigger reactivity
+				// 创建新对象以触发响应式更新
+				partial.content[proxyEvent.contentIndex] = { ...content };
 				return {
 					type: "toolcall_delta",
 					contentIndex: proxyEvent.contentIndex,
@@ -307,6 +375,7 @@ function processProxyEvent(
 		}
 
 		case "toolcall_end": {
+			// 清理临时的 partialJson 字段
 			const content = partial.content[proxyEvent.contentIndex];
 			if (content?.type === "toolCall") {
 				delete (content as any).partialJson;
@@ -321,17 +390,20 @@ function processProxyEvent(
 		}
 
 		case "done":
+			// 正常结束：更新停止原因和用量统计
 			partial.stopReason = proxyEvent.reason;
 			partial.usage = proxyEvent.usage;
 			return { type: "done", reason: proxyEvent.reason, message: partial };
 
 		case "error":
+			// 错误结束：更新停止原因、错误信息和用量统计
 			partial.stopReason = proxyEvent.reason;
 			partial.errorMessage = proxyEvent.errorMessage;
 			partial.usage = proxyEvent.usage;
 			return { type: "error", reason: proxyEvent.reason, error: partial };
 
 		default: {
+			// 穷举检查：确保所有事件类型都已处理
 			const _exhaustiveCheck: never = proxyEvent;
 			console.warn(`Unhandled proxy event type: ${(proxyEvent as any).type}`);
 			return undefined;

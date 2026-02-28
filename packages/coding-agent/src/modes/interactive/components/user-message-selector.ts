@@ -1,15 +1,23 @@
+/**
+ * 用户消息选择器组件。
+ *
+ * 该文件提供用于分支操作的用户消息选择界面，
+ * 允许用户从会话中选择一条消息作为分支起始点。
+ */
+
 import { type Component, Container, getEditorKeybindings, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
+/** 用户消息项接口 */
 interface UserMessageItem {
-	id: string; // Entry ID in the session
-	text: string; // The message text
-	timestamp?: string; // Optional timestamp if available
+	id: string; // 会话中的条目 ID
+	text: string; // 消息文本
+	timestamp?: string; // 可选的时间戳
 }
 
 /**
- * Custom user message list component with selection
+ * 自定义用户消息列表组件，支持键盘选择。
  */
 class UserMessageList implements Component {
 	private messages: UserMessageItem[] = [];
@@ -105,6 +113,10 @@ class UserMessageList implements Component {
 
 /**
  * Component that renders a user message selector for branching
+ */
+/**
+ * 用户消息选择器组件。
+ * 在带边框的容器中显示用户消息列表，用于分支操作时选择消息。
  */
 export class UserMessageSelectorComponent extends Container {
 	private messageList: UserMessageList;

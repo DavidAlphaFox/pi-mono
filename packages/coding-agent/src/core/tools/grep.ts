@@ -1,3 +1,15 @@
+/**
+ * 内容搜索工具（Grep）
+ *
+ * 本文件实现了基于 ripgrep（rg）的文件内容搜索工具，功能包括：
+ * 1. 使用正则表达式或字面量字符串搜索文件内容
+ * 2. 支持 glob 文件过滤、大小写不敏感搜索、上下文行显示
+ * 3. 匹配数量限制（默认 100 条），超出时终止搜索
+ * 4. 输出截断：超长行截断到 500 字符，总输出限制为 50KB
+ * 5. 自动遵守 .gitignore 规则
+ * 6. 可插拔的操作接口（GrepOperations），支持远程文件系统
+ */
+
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
@@ -29,24 +41,30 @@ const grepSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" })),
 });
 
+/** Grep 工具的输入参数类型 */
 export type GrepToolInput = Static<typeof grepSchema>;
 
+/** 默认匹配数量上限 */
 const DEFAULT_LIMIT = 100;
 
+/** Grep 工具的详细信息 */
 export interface GrepToolDetails {
+	/** 输出截断结果（如果发生了截断） */
 	truncation?: TruncationResult;
+	/** 达到匹配上限时的限制值 */
 	matchLimitReached?: number;
+	/** 是否有行被截断 */
 	linesTruncated?: boolean;
 }
 
 /**
- * Pluggable operations for the grep tool.
- * Override these to delegate search to remote systems (e.g., SSH).
+ * Grep 工具的可插拔操作接口。
+ * 可通过覆写此接口将搜索委托给远程系统（如 SSH）。
  */
 export interface GrepOperations {
-	/** Check if path is a directory. Throws if path doesn't exist. */
+	/** 检查路径是否为目录，路径不存在时抛出异常 */
 	isDirectory: (absolutePath: string) => Promise<boolean> | boolean;
-	/** Read file contents for context lines */
+	/** 读取文件内容（用于上下文行展示） */
 	readFile: (absolutePath: string) => Promise<string> | string;
 }
 
@@ -55,11 +73,16 @@ const defaultGrepOperations: GrepOperations = {
 	readFile: (p) => readFileSync(p, "utf-8"),
 };
 
+/** Grep 工具的配置选项 */
 export interface GrepToolOptions {
-	/** Custom operations for grep. Default: local filesystem + ripgrep */
+	/** 自定义搜索操作，默认使用本地文件系统 + ripgrep */
 	operations?: GrepOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的 Grep 搜索工具实例。
+ * 使用 ripgrep 执行搜索，支持正则/字面量模式、glob 过滤和上下文行。
+ */
 export function createGrepTool(cwd: string, options?: GrepToolOptions): AgentTool<typeof grepSchema> {
 	const customOps = options?.operations;
 
@@ -342,5 +365,5 @@ export function createGrepTool(cwd: string, options?: GrepToolOptions): AgentToo
 	};
 }
 
-/** Default grep tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认 Grep 工具实例，保持向后兼容 */
 export const grepTool = createGrepTool(process.cwd());

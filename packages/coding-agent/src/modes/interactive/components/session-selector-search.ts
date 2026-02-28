@@ -1,10 +1,23 @@
+/**
+ * 会话搜索和过滤逻辑。
+ *
+ * 该文件提供会话列表的搜索功能，支持：
+ * - 模糊匹配和精确短语匹配
+ * - 正则表达式搜索
+ * - 多种排序模式（线程化、最近、相关性）
+ * - 按是否有名称过滤
+ */
+
 import { fuzzyMatch } from "@mariozechner/pi-tui";
 import type { SessionInfo } from "../../../core/session-manager.js";
 
+/** 排序模式 */
 export type SortMode = "threaded" | "recent" | "relevance";
 
+/** 名称过滤模式 */
 export type NameFilter = "all" | "named";
 
+/** 解析后的搜索查询 */
 export interface ParsedSearchQuery {
 	mode: "tokens" | "regex";
 	tokens: { kind: "fuzzy" | "phrase"; value: string }[];
@@ -13,9 +26,11 @@ export interface ParsedSearchQuery {
 	error?: string;
 }
 
+/** 匹配结果 */
 export interface MatchResult {
+	/** 是否匹配 */
 	matches: boolean;
-	/** Lower is better; only meaningful when matches === true */
+	/** 匹配分数（越低越好，仅在 matches === true 时有意义） */
 	score: number;
 }
 
@@ -27,6 +42,7 @@ function getSessionSearchText(session: SessionInfo): string {
 	return `${session.id} ${session.name ?? ""} ${session.allMessagesText} ${session.cwd}`;
 }
 
+/** 判断会话是否有非空名称 */
 export function hasSessionName(session: SessionInfo): boolean {
 	return Boolean(session.name?.trim());
 }
@@ -36,6 +52,14 @@ function matchesNameFilter(session: SessionInfo, filter: NameFilter): boolean {
 	return hasSessionName(session);
 }
 
+/**
+ * 解析搜索查询字符串。
+ *
+ * 支持三种模式：
+ * - 空查询：返回空 token 列表
+ * - 正则模式：以 "re:" 开头，后跟正则表达式
+ * - Token 模式：按空白分词，支持双引号包裹的精确短语匹配
+ */
 export function parseSearchQuery(query: string): ParsedSearchQuery {
 	const trimmed = query.trim();
 	if (!trimmed) {
@@ -113,6 +137,12 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
 	return { mode: "tokens", tokens, regex: null };
 }
 
+/**
+ * 将会话与已解析的搜索查询进行匹配。
+ *
+ * 根据查询模式（正则/Token）对会话的搜索文本进行匹配，
+ * 返回是否匹配及匹配分数（分数越低表示匹配度越高）。
+ */
 export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): MatchResult {
 	const text = getSessionSearchText(session);
 
@@ -153,6 +183,13 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 	return { matches: true, score: totalScore };
 }
 
+/**
+ * 根据查询、排序模式和名称过滤条件筛选并排序会话列表。
+ *
+ * - recent 模式：仅过滤，保持原有顺序
+ * - relevance 模式：按匹配分数排序，分数相同时按修改时间降序
+ * - threaded 模式：同 relevance 行为
+ */
 export function filterAndSortSessions(
 	sessions: SessionInfo[],
 	query: string,

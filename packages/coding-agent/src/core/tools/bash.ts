@@ -1,3 +1,14 @@
+/**
+ * Bash 命令执行工具
+ *
+ * 本文件实现了在当前工作目录下执行 Bash 命令的工具，功能包括：
+ * 1. 通过子进程执行 shell 命令，支持 stdout/stderr 流式输出
+ * 2. 支持超时控制和中止信号（AbortSignal）
+ * 3. 输出截断：保留最后 N 行/N 字节，超出部分写入临时文件
+ * 4. 可插拔的执行操作（BashOperations），支持远程执行（如 SSH）
+ * 5. 支持命令前缀和进程上下文钩子（spawnHook）
+ */
+
 import { randomBytes } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +20,7 @@ import { getShellConfig, getShellEnv, killProcessTree } from "../../utils/shell.
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult, truncateTail } from "./truncate.js";
 
 /**
- * Generate a unique temp file path for bash output
+ * 生成唯一的临时文件路径，用于保存 Bash 命令的完整输出。
  */
 function getTempFilePath(): string {
 	const id = randomBytes(8).toString("hex");
@@ -21,24 +32,28 @@ const bashSchema = Type.Object({
 	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
 });
 
+/** Bash 工具的输入参数类型 */
 export type BashToolInput = Static<typeof bashSchema>;
 
+/** Bash 工具的详细信息，包含截断信息和完整输出路径 */
 export interface BashToolDetails {
+	/** 输出截断结果（如果发生了截断） */
 	truncation?: TruncationResult;
+	/** 完整输出保存的临时文件路径 */
 	fullOutputPath?: string;
 }
 
 /**
- * Pluggable operations for the bash tool.
- * Override these to delegate command execution to remote systems (e.g., SSH).
+ * Bash 工具的可插拔操作接口。
+ * 可通过覆写此接口将命令执行委托给远程系统（如 SSH）。
  */
 export interface BashOperations {
 	/**
-	 * Execute a command and stream output.
-	 * @param command - The command to execute
-	 * @param cwd - Working directory
-	 * @param options - Execution options
-	 * @returns Promise resolving to exit code (null if killed)
+	 * 执行命令并流式输出结果。
+	 * @param command - 要执行的命令
+	 * @param cwd - 工作目录
+	 * @param options - 执行选项
+	 * @returns 返回退出码的 Promise（被杀死时为 null）
 	 */
 	exec: (
 		command: string,
@@ -53,7 +68,7 @@ export interface BashOperations {
 }
 
 /**
- * Default bash operations using local shell
+ * 默认的 Bash 操作实现，使用本地 shell 执行命令。
  */
 const defaultBashOperations: BashOperations = {
 	exec: (command, cwd, { onData, signal, timeout, env }) => {
@@ -136,14 +151,22 @@ const defaultBashOperations: BashOperations = {
 	},
 };
 
+/** Bash 进程的上下文信息，包含命令、工作目录和环境变量 */
 export interface BashSpawnContext {
+	/** 要执行的命令 */
 	command: string;
+	/** 工作目录 */
 	cwd: string;
+	/** 环境变量 */
 	env: NodeJS.ProcessEnv;
 }
 
+/** 进程上下文钩子，用于在执行前修改命令、工作目录或环境变量 */
 export type BashSpawnHook = (context: BashSpawnContext) => BashSpawnContext;
 
+/**
+ * 解析进程上下文：构建基础上下文，然后应用可选的钩子进行变换。
+ */
 function resolveSpawnContext(command: string, cwd: string, spawnHook?: BashSpawnHook): BashSpawnContext {
 	const baseContext: BashSpawnContext = {
 		command,
@@ -154,15 +177,20 @@ function resolveSpawnContext(command: string, cwd: string, spawnHook?: BashSpawn
 	return spawnHook ? spawnHook(baseContext) : baseContext;
 }
 
+/** Bash 工具的配置选项 */
 export interface BashToolOptions {
-	/** Custom operations for command execution. Default: local shell */
+	/** 自定义命令执行操作，默认使用本地 shell */
 	operations?: BashOperations;
-	/** Command prefix prepended to every command (e.g., "shopt -s expand_aliases" for alias support) */
+	/** 命令前缀，会添加到每条命令之前（例如 "shopt -s expand_aliases" 以支持别名） */
 	commandPrefix?: string;
-	/** Hook to adjust command, cwd, or env before execution */
+	/** 执行前的钩子，用于调整命令、工作目录或环境变量 */
 	spawnHook?: BashSpawnHook;
 }
 
+/**
+ * 创建绑定到指定工作目录的 Bash 工具实例。
+ * 支持流式输出、超时控制、输出截断以及大输出自动写入临时文件。
+ */
 export function createBashTool(cwd: string, options?: BashToolOptions): AgentTool<typeof bashSchema> {
 	const ops = options?.operations ?? defaultBashOperations;
 	const commandPrefix = options?.commandPrefix;
@@ -317,5 +345,5 @@ export function createBashTool(cwd: string, options?: BashToolOptions): AgentToo
 	};
 }
 
-/** Default bash tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认 Bash 工具实例，保持向后兼容 */
 export const bashTool = createBashTool(process.cwd());

@@ -1,3 +1,10 @@
+/**
+ * @file renderer-registry.ts
+ * @description 工具渲染器注册表和渲染辅助函数。
+ * 管理工具名称到渲染器的映射，提供 renderHeader 和 renderCollapsibleHeader
+ * 辅助函数用于统一工具调用的头部 UI（状态图标、加载动画、折叠展开）。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import { html, type TemplateResult } from "lit";
 import type { Ref } from "lit/directives/ref.js";
@@ -5,26 +12,33 @@ import { ref } from "lit/directives/ref.js";
 import { ChevronsUpDown, ChevronUp, Loader } from "lucide";
 import type { ToolRenderer } from "./types.js";
 
-// Registry of tool renderers
+/** 工具渲染器映射表 */
 export const toolRenderers = new Map<string, ToolRenderer>();
 
 /**
- * Register a custom tool renderer
+ * 注册一个自定义工具渲染器。
+ * @param toolName - 工具名称
+ * @param renderer - 渲染器实例
  */
 export function registerToolRenderer(toolName: string, renderer: ToolRenderer): void {
 	toolRenderers.set(toolName, renderer);
 }
 
 /**
- * Get a tool renderer by name
+ * 根据工具名称获取对应的渲染器。
+ * @param toolName - 工具名称
+ * @returns 渲染器实例，若未注册则返回 undefined
  */
 export function getToolRenderer(toolName: string): ToolRenderer | undefined {
 	return toolRenderers.get(toolName);
 }
 
 /**
- * Helper to render a header for tool renderers
- * Shows icon on left when complete/error, spinner on right when in progress
+ * 渲染工具调用的头部行。
+ * 完成/错误时左侧显示状态图标，进行中时右侧显示旋转加载图标。
+ * @param state - 执行状态（进行中/完成/错误）
+ * @param toolIcon - 工具图标组件
+ * @param text - 显示文本
  */
 export function renderHeader(
 	state: "inprogress" | "complete" | "error",
@@ -63,8 +77,14 @@ export function renderHeader(
 }
 
 /**
- * Helper to render a collapsible header for tool renderers
- * Same as renderHeader but with a chevron button that toggles visibility of content
+ * 渲染可折叠的工具调用头部行。
+ * 与 renderHeader 类似，但带有 Chevron 按钮可切换内容区域的显示/隐藏。
+ * @param state - 执行状态
+ * @param toolIcon - 工具图标组件
+ * @param text - 显示文本
+ * @param contentRef - 内容区域的 Ref 引用
+ * @param chevronRef - Chevron 按钮的 Ref 引用
+ * @param defaultExpanded - 是否默认展开
  */
 export function renderCollapsibleHeader(
 	state: "inprogress" | "complete" | "error",

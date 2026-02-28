@@ -1,8 +1,15 @@
 /**
- * Main entry point for the coding agent CLI.
+ * 编码智能体 CLI 的主入口模块
  *
- * This file handles CLI argument parsing and translates them into
- * createAgentSession() options. The SDK does the heavy lifting.
+ * 职责：
+ * - 解析 CLI 命令行参数，将其转换为 createAgentSession() 的配置选项
+ * - 处理子命令（install、remove、update、list、config）
+ * - 加载扩展、技能、提示模板和主题等资源
+ * - 解析模型、思考级别等配置
+ * - 根据参数选择运行模式：交互模式、打印模式或 RPC 模式
+ * - 管理会话的创建、恢复和继续
+ *
+ * 核心 SDK 承担实际的智能体运行工作，本文件仅负责配置和初始化。
  */
 
 import { type ImageContent, modelsAreEqual, supportsXhigh } from "@mariozechner/pi-ai";
@@ -33,8 +40,8 @@ import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.js";
 
 /**
- * Read all content from piped stdin.
- * Returns undefined if stdin is a TTY (interactive terminal).
+ * 从管道化的标准输入中读取所有内容。
+ * 如果标准输入是 TTY（交互式终端），返回 undefined。
  */
 async function readPipedStdin(): Promise<string | undefined> {
 	// If stdin is a TTY, we're running interactively - don't read stdin
@@ -55,6 +62,7 @@ async function readPipedStdin(): Promise<string | undefined> {
 	});
 }
 
+/** 报告设置管理器中累积的错误，将其作为黄色警告输出到控制台 */
 function reportSettingsErrors(settingsManager: SettingsManager, context: string): void {
 	const errors = settingsManager.drainErrors();
 	for (const { scope, error } of errors) {
@@ -65,13 +73,16 @@ function reportSettingsErrors(settingsManager: SettingsManager, context: string)
 	}
 }
 
+/** 判断环境变量值是否为"真"（"1"、"true" 或 "yes"） */
 function isTruthyEnvFlag(value: string | undefined): boolean {
 	if (!value) return false;
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
+/** 包管理子命令类型 */
 type PackageCommand = "install" | "remove" | "update" | "list";
 
+/** 包管理命令的解析选项 */
 interface PackageCommandOptions {
 	command: PackageCommand;
 	source?: string;
@@ -80,6 +91,7 @@ interface PackageCommandOptions {
 	invalidOption?: string;
 }
 
+/** 获取包管理命令的使用说明字符串 */
 function getPackageCommandUsage(command: PackageCommand): string {
 	switch (command) {
 		case "install":
@@ -93,6 +105,7 @@ function getPackageCommandUsage(command: PackageCommand): string {
 	}
 }
 
+/** 打印指定包管理命令的帮助信息 */
 function printPackageCommandHelp(command: PackageCommand): void {
 	switch (command) {
 		case "install":
@@ -147,6 +160,7 @@ List installed packages from user and project settings.
 	}
 }
 
+/** 尝试将参数解析为包管理命令，如果第一个参数不是有效命令则返回 undefined */
 function parsePackageCommand(args: string[]): PackageCommandOptions | undefined {
 	const [command, ...rest] = args;
 	if (command !== "install" && command !== "remove" && command !== "update" && command !== "list") {
@@ -186,6 +200,10 @@ function parsePackageCommand(args: string[]): PackageCommandOptions | undefined 
 	return { command, source, local, help, invalidOption };
 }
 
+/**
+ * 处理包管理命令（install/remove/update/list）。
+ * 如果参数匹配包管理命令则执行并返回 true，否则返回 false。
+ */
 async function handlePackageCommand(args: string[]): Promise<boolean> {
 	const options = parsePackageCommand(args);
 	if (!options) {
@@ -301,6 +319,10 @@ async function handlePackageCommand(args: string[]): Promise<boolean> {
 	}
 }
 
+/**
+ * 处理 @file 参数，准备初始消息和图片附件。
+ * 将文件内容和文本消息合并为发送给智能体的初始输入。
+ */
 async function prepareInitialMessage(
 	parsed: Args,
 	autoResizeImages: boolean,
@@ -328,16 +350,17 @@ async function prepareInitialMessage(
 	};
 }
 
-/** Result from resolving a session argument */
+/** 会话参数的解析结果类型 */
 type ResolvedSession =
-	| { type: "path"; path: string } // Direct file path
-	| { type: "local"; path: string } // Found in current project
-	| { type: "global"; path: string; cwd: string } // Found in different project
-	| { type: "not_found"; arg: string }; // Not found anywhere
+	| { type: "path"; path: string } // 直接文件路径
+	| { type: "local"; path: string } // 在当前项目中找到
+	| { type: "global"; path: string; cwd: string } // 在其他项目中找到
+	| { type: "not_found"; arg: string }; // 未找到
 
 /**
- * Resolve a session argument to a file path.
- * If it looks like a path, use as-is. Otherwise try to match as session ID prefix.
+ * 将会话参数解析为文件路径。
+ * 如果参数看起来像路径，则直接使用。否则尝试按会话 ID 前缀匹配。
+ * 先在当前项目中查找，再全局搜索所有项目。
  */
 async function resolveSessionPath(sessionArg: string, cwd: string, sessionDir?: string): Promise<ResolvedSession> {
 	// If it looks like a file path, use as-is
@@ -366,7 +389,7 @@ async function resolveSessionPath(sessionArg: string, cwd: string, sessionDir?: 
 	return { type: "not_found", arg: sessionArg };
 }
 
-/** Prompt user for yes/no confirmation */
+/** 提示用户进行 yes/no 确认 */
 async function promptConfirm(message: string): Promise<boolean> {
 	return new Promise((resolve) => {
 		const rl = createInterface({
@@ -380,6 +403,11 @@ async function promptConfirm(message: string): Promise<boolean> {
 	});
 }
 
+/**
+ * 根据 CLI 参数创建会话管理器。
+ * 处理 --no-session、--session、--continue、--session-dir 等标志。
+ * 返回 undefined 表示使用默认会话管理器。
+ */
 async function createSessionManager(parsed: Args, cwd: string): Promise<SessionManager | undefined> {
 	if (parsed.noSession) {
 		return SessionManager.inMemory();
@@ -420,6 +448,11 @@ async function createSessionManager(parsed: Args, cwd: string): Promise<SessionM
 	return undefined;
 }
 
+/**
+ * 构建会话创建选项。
+ * 综合处理 CLI 模型参数、作用域模型列表、思考级别和工具配置。
+ * 返回 CreateAgentSessionOptions 和一个标志表示思考级别是否来自模型参数。
+ */
 function buildSessionOptions(
 	parsed: Args,
 	scopedModels: ScopedModel[],
@@ -516,6 +549,7 @@ function buildSessionOptions(
 	return { options, cliThinkingFromModel };
 }
 
+/** 处理 "config" 子命令，打开 TUI 配置选择器 */
 async function handleConfigCommand(args: string[]): Promise<boolean> {
 	if (args[0] !== "config") {
 		return false;
@@ -539,6 +573,18 @@ async function handleConfigCommand(args: string[]): Promise<boolean> {
 	process.exit(0);
 }
 
+/**
+ * CLI 主函数 - 编码智能体的完整启动流程。
+ *
+ * 流程：
+ * 1. 处理离线模式
+ * 2. 处理包管理和配置子命令
+ * 3. 运行迁移脚本
+ * 4. 两阶段参数解析（第一阶段获取扩展路径，第二阶段包含扩展标志）
+ * 5. 加载资源（扩展、技能、提示模板、主题）
+ * 6. 解析模型和思考级别
+ * 7. 创建会话并启动运行模式（交互/打印/RPC）
+ */
 export async function main(args: string[]) {
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
 	if (offlineMode) {

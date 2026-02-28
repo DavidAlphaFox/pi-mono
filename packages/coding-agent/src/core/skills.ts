@@ -1,3 +1,15 @@
+/**
+ * 技能（Skill）加载和管理模块
+ *
+ * 职责：
+ * - 从目录发现和加载技能（遵循 Agent Skills 规范）
+ * - 验证技能名称和描述（格式、长度、字符约束）
+ * - 处理 SKILL.md 文件的 frontmatter 元数据
+ * - 将技能格式化为系统提示词中的 XML 块
+ * - 支持 .gitignore/.ignore 规则跳过文件
+ * - 处理名称冲突和符号链接去重
+ */
+
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import ignore from "ignore";
 import { homedir } from "os";
@@ -63,6 +75,7 @@ function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
 	}
 }
 
+/** 技能文件的 frontmatter 元数据 */
 export interface SkillFrontmatter {
 	name?: string;
 	description?: string;
@@ -70,6 +83,7 @@ export interface SkillFrontmatter {
 	[key: string]: unknown;
 }
 
+/** 已加载的技能 */
 export interface Skill {
 	name: string;
 	description: string;
@@ -79,14 +93,15 @@ export interface Skill {
 	disableModelInvocation: boolean;
 }
 
+/** 技能加载结果 */
 export interface LoadSkillsResult {
 	skills: Skill[];
 	diagnostics: ResourceDiagnostic[];
 }
 
 /**
- * Validate skill name per Agent Skills spec.
- * Returns array of validation error messages (empty if valid).
+ * 按 Agent Skills 规范验证技能名称
+ * 返回验证错误消息数组（有效时为空）
  */
 function validateName(name: string, parentDirName: string): string[] {
 	const errors: string[] = [];
@@ -114,9 +129,7 @@ function validateName(name: string, parentDirName: string): string[] {
 	return errors;
 }
 
-/**
- * Validate description per Agent Skills spec.
- */
+/** 按 Agent Skills 规范验证技能描述 */
 function validateDescription(description: string | undefined): string[] {
 	const errors: string[] = [];
 
@@ -129,6 +142,7 @@ function validateDescription(description: string | undefined): string[] {
 	return errors;
 }
 
+/** 从目录加载技能的选项 */
 export interface LoadSkillsFromDirOptions {
 	/** Directory to scan for skills */
 	dir: string;
@@ -137,11 +151,11 @@ export interface LoadSkillsFromDirOptions {
 }
 
 /**
- * Load skills from a directory.
+ * 从目录加载技能
  *
- * Discovery rules:
- * - direct .md children in the root
- * - recursive SKILL.md under subdirectories
+ * 发现规则：
+ * - 根目录下的直接 .md 子文件
+ * - 子目录下递归查找 SKILL.md
  */
 export function loadSkillsFromDir(options: LoadSkillsFromDirOptions): LoadSkillsResult {
 	const { dir, source } = options;
@@ -280,12 +294,11 @@ function loadSkillFromFile(
 }
 
 /**
- * Format skills for inclusion in a system prompt.
- * Uses XML format per Agent Skills standard.
- * See: https://agentskills.io/integrate-skills
+ * 将技能格式化为系统提示词中的 XML 块
+ * 遵循 Agent Skills 标准 XML 格式
  *
- * Skills with disableModelInvocation=true are excluded from the prompt
- * (they can only be invoked explicitly via /skill:name commands).
+ * disableModelInvocation=true 的技能不会包含在提示词中
+ * （只能通过 /skill:name 命令显式调用）
  */
 export function formatSkillsForPrompt(skills: Skill[]): string {
 	const visibleSkills = skills.filter((s) => !s.disableModelInvocation);
@@ -324,6 +337,7 @@ function escapeXml(str: string): string {
 		.replace(/'/g, "&apos;");
 }
 
+/** 技能加载选项 */
 export interface LoadSkillsOptions {
 	/** Working directory for project-local skills. Default: process.cwd() */
 	cwd?: string;
@@ -349,8 +363,9 @@ function resolveSkillPath(p: string, cwd: string): string {
 }
 
 /**
- * Load skills from all configured locations.
- * Returns skills and any validation diagnostics.
+ * 从所有配置的位置加载技能
+ * 加载顺序：用户全局目录 → 项目目录 → 显式路径
+ * 返回技能列表和验证诊断信息
  */
 export function loadSkills(options: LoadSkillsOptions = {}): LoadSkillsResult {
 	const { cwd = process.cwd(), agentDir, skillPaths = [], includeDefaults = true } = options;

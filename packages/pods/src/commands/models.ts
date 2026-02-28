@@ -1,3 +1,13 @@
+/**
+ * @file 模型管理命令模块
+ *
+ * 本文件实现了 vLLM 模型生命周期管理的所有命令，包括：
+ * - 启动模型（startModel）：在 GPU Pod 上部署 vLLM 模型服务
+ * - 停止模型（stopModel / stopAllModels）：终止运行中的模型进程
+ * - 列出模型（listModels）：显示当前 Pod 上所有运行中的模型及其状态
+ * - 查看日志（viewLogs）：流式输出指定模型的运行日志
+ * - 显示已知模型（showKnownModels）：展示所有预定义模型及其硬件兼容性
+ */
 import chalk from "chalk";
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
@@ -9,7 +19,9 @@ import { sshExec } from "../ssh.js";
 import type { Pod } from "../types.js";
 
 /**
- * Get the pod to use (active or override)
+ * 获取要操作的 Pod（支持 --pod 参数覆盖活跃 Pod）
+ * @param podOverride - 可选的 Pod 名称覆盖，优先于活跃 Pod
+ * @returns Pod 的名称和配置信息
  */
 const getPod = (podOverride?: string): { name: string; pod: Pod } => {
 	if (podOverride) {
@@ -31,7 +43,10 @@ const getPod = (podOverride?: string): { name: string; pod: Pod } => {
 };
 
 /**
- * Find next available port starting from 8001
+ * 获取下一个可用端口
+ * 从 8001 开始递增，跳过已被其他模型占用的端口
+ * @param pod - Pod 配置信息
+ * @returns 可用的端口号
  */
 const getNextPort = (pod: Pod): number => {
 	const usedPorts = Object.values(pod.models).map((m) => m.port);
@@ -43,15 +58,19 @@ const getNextPort = (pod: Pod): number => {
 };
 
 /**
- * Select GPUs for model deployment (round-robin)
+ * 为模型部署选择 GPU
+ * 使用轮询策略，优先选择当前负载最低的 GPU
+ * @param pod - Pod 配置信息
+ * @param count - 需要的 GPU 数量，默认为 1
+ * @returns 选中的 GPU 设备 ID 列表
  */
 const selectGPUs = (pod: Pod, count: number = 1): number[] => {
+	// 如果请求所有 GPU，直接返回全部
 	if (count === pod.gpus.length) {
-		// Use all GPUs
 		return pod.gpus.map((g) => g.id);
 	}
 
-	// Count GPU usage across all models
+	// 统计每个 GPU 被已部署模型使用的次数
 	const gpuUsage = new Map<number, number>();
 	for (const gpu of pod.gpus) {
 		gpuUsage.set(gpu.id, 0);
@@ -63,17 +82,31 @@ const selectGPUs = (pod: Pod, count: number = 1): number[] => {
 		}
 	}
 
-	// Sort GPUs by usage (least used first)
+	// 按使用次数升序排列，优先选择最空闲的 GPU
 	const sortedGPUs = Array.from(gpuUsage.entries())
 		.sort((a, b) => a[1] - b[1])
 		.map((entry) => entry[0]);
 
-	// Return the least used GPUs
+	// 返回最空闲的前 N 个 GPU
 	return sortedGPUs.slice(0, count);
 };
 
 /**
- * Start a model
+ * 启动模型
+ * 在指定 Pod 上部署 vLLM 模型服务，包括：
+ * 1. 确定 GPU 分配和 vLLM 启动参数
+ * 2. 上传并执行模型运行脚本
+ * 3. 监控启动日志，等待服务就绪
+ * 4. 输出连接信息和使用示例
+ *
+ * @param modelId - 模型标识符（如 HuggingFace 模型 ID）
+ * @param name - 模型部署别名
+ * @param options - 启动选项
+ * @param options.pod - 指定 Pod 名称（覆盖活跃 Pod）
+ * @param options.vllmArgs - 自定义 vLLM 启动参数（使用时忽略其他选项）
+ * @param options.memory - GPU 显存使用比例（如 "90%"）
+ * @param options.context - 上下文窗口大小（如 "32k"）
+ * @param options.gpus - 使用的 GPU 数量
  */
 export const startModel = async (
 	modelId: string,
@@ -88,7 +121,7 @@ export const startModel = async (
 ) => {
 	const { name: podName, pod } = getPod(options.pod);
 
-	// Validation
+	// 验证前置条件
 	if (!pod.modelsPath) {
 		console.error(chalk.red("Pod does not have a models path configured"));
 		process.exit(1);
@@ -100,25 +133,25 @@ export const startModel = async (
 
 	const port = getNextPort(pod);
 
-	// Determine GPU allocation and vLLM args
+	// 确定 GPU 分配方案和 vLLM 启动参数
 	let gpus: number[] = [];
 	let vllmArgs: string[] = [];
 	let modelConfig = null;
 
 	if (options.vllmArgs?.length) {
-		// Custom args override everything
+		// 使用自定义参数时，GPU 分配由 vLLM 自行管理
 		vllmArgs = options.vllmArgs;
 		console.log(chalk.gray("Using custom vLLM args, GPU allocation managed by vLLM"));
 	} else if (isKnownModel(modelId)) {
-		// Handle --gpus parameter for known models
+		// 已知模型：根据预定义配置分配 GPU
 		if (options.gpus) {
-			// Validate GPU count
+			// 用户指定了 GPU 数量
 			if (options.gpus > pod.gpus.length) {
 				console.error(chalk.red(`Error: Requested ${options.gpus} GPUs but pod only has ${pod.gpus.length}`));
 				process.exit(1);
 			}
 
-			// Try to find config for requested GPU count
+			// 查找匹配请求 GPU 数量的配置
 			modelConfig = getModelConfig(modelId, pod.gpus, options.gpus);
 			if (modelConfig) {
 				gpus = selectGPUs(pod, options.gpus);
@@ -129,7 +162,7 @@ export const startModel = async (
 				);
 				console.error(chalk.yellow("Available configurations:"));
 
-				// Show available configurations
+				// 显示所有可用的 GPU 配置方案
 				for (let gpuCount = 1; gpuCount <= pod.gpus.length; gpuCount++) {
 					const config = getModelConfig(modelId, pod.gpus, gpuCount);
 					if (config) {
@@ -139,7 +172,7 @@ export const startModel = async (
 				process.exit(1);
 			}
 		} else {
-			// Find best config for this hardware (original behavior)
+			// 未指定 GPU 数量：从最多 GPU 开始逐步减少，找到第一个兼容配置
 			for (let gpuCount = pod.gpus.length; gpuCount >= 1; gpuCount--) {
 				modelConfig = getModelConfig(modelId, pod.gpus, gpuCount);
 				if (modelConfig) {
@@ -154,25 +187,26 @@ export const startModel = async (
 			}
 		}
 	} else {
-		// Unknown model
+		// 未知模型：默认使用单个 GPU
 		if (options.gpus) {
 			console.error(chalk.red("Error: --gpus can only be used with predefined models"));
 			console.error(chalk.yellow("For custom models, use --vllm with tensor-parallel-size or similar arguments"));
 			process.exit(1);
 		}
-		// Single GPU default
 		gpus = selectGPUs(pod, 1);
 		console.log(chalk.gray("Unknown model, defaulting to single GPU"));
 	}
 
-	// Apply memory/context overrides
+	// 应用用户指定的显存和上下文窗口覆盖参数
 	if (!options.vllmArgs?.length) {
 		if (options.memory) {
+			// 将百分比转换为小数（如 "90%" -> 0.9）
 			const fraction = parseFloat(options.memory.replace("%", "")) / 100;
 			vllmArgs = vllmArgs.filter((arg) => !arg.includes("gpu-memory-utilization"));
 			vllmArgs.push("--gpu-memory-utilization", String(fraction));
 		}
 		if (options.context) {
+			// 将简写转换为具体的 token 数量（如 "32k" -> 32768）
 			const contextSizes: Record<string, number> = {
 				"4k": 4096,
 				"8k": 8192,
@@ -187,7 +221,7 @@ export const startModel = async (
 		}
 	}
 
-	// Show what we're doing
+	// 显示部署信息
 	console.log(chalk.green(`Starting model '${name}' on pod '${podName}'...`));
 	console.log(`Model: ${modelId}`);
 	console.log(`Port: ${port}`);
@@ -195,18 +229,18 @@ export const startModel = async (
 	if (modelConfig?.notes) console.log(chalk.yellow(`Note: ${modelConfig.notes}`));
 	console.log("");
 
-	// Read and customize model_run.sh script with our values
+	// 读取并定制模型运行脚本，替换占位符为实际值
 	const scriptPath = join(dirname(fileURLToPath(import.meta.url)), "../../scripts/model_run.sh");
 	let scriptContent = readFileSync(scriptPath, "utf-8");
 
-	// Replace placeholders - no escaping needed, heredoc with 'EOF' is literal
+	// 替换脚本模板中的占位符（使用 heredoc 的 'EOF' 引号模式，无需转义）
 	scriptContent = scriptContent
 		.replace("{{MODEL_ID}}", modelId)
 		.replace("{{NAME}}", name)
 		.replace("{{PORT}}", String(port))
 		.replace("{{VLLM_ARGS}}", vllmArgs.join(" "));
 
-	// Upload customized script
+	// 通过 SSH 上传定制后的脚本到远程 Pod
 	await sshExec(
 		pod.ssh,
 		`cat > /tmp/model_run_${name}.sh << 'EOF'
@@ -215,7 +249,7 @@ EOF
 chmod +x /tmp/model_run_${name}.sh`,
 	);
 
-	// Prepare environment
+	// 准备环境变量列表
 	const env = [
 		`HF_TOKEN='${process.env.HF_TOKEN}'`,
 		`PI_API_KEY='${process.env.PI_API_KEY}'`,
@@ -224,19 +258,21 @@ chmod +x /tmp/model_run_${name}.sh`,
 		`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`,
 		`FORCE_COLOR=1`,
 		`TERM=xterm-256color`,
+		// 单 GPU 时通过 CUDA_VISIBLE_DEVICES 指定设备
 		...(gpus.length === 1 ? [`CUDA_VISIBLE_DEVICES=${gpus[0]}`] : []),
+		// 添加模型配置中定义的额外环境变量
 		...Object.entries(modelConfig?.env || {}).map(([k, v]) => `${k}='${v}'`),
 	]
 		.map((e) => `export ${e}`)
 		.join("\n");
 
-	// Start the model runner with script command for pseudo-TTY (preserves colors)
-	// Note: We use script to preserve colors and create a log file
-	// setsid creates a new session so it survives SSH disconnection
+	// 在远程 Pod 上启动模型运行器
+	// 使用 script 命令创建伪终端以保留颜色输出
+	// 使用 setsid 创建新会话，确保进程在 SSH 断开后继续运行
 	const startCmd = `
 		${env}
 		mkdir -p ~/.vllm_logs
-		# Create a wrapper that monitors the script command
+		# 创建一个包装脚本来监控 script 命令的执行
 		cat > /tmp/model_wrapper_${name}.sh << 'WRAPPER'
 #!/bin/bash
 script -q -f -c "/tmp/model_run_${name}.sh" ~/.vllm_logs/${name}.log
@@ -257,7 +293,7 @@ WRAPPER
 		process.exit(1);
 	}
 
-	// Save to config
+	// 将模型信息保存到本地配置
 	const config = loadConfig();
 	config.pods[podName].models[name] = { model: modelId, port, gpu: gpus, pid };
 	saveConfig(config);
@@ -265,21 +301,20 @@ WRAPPER
 	console.log(`Model runner started with PID: ${pid}`);
 	console.log("Streaming logs... (waiting for startup)\n");
 
-	// Small delay to ensure log file is created
+	// 短暂延迟等待日志文件创建
 	await new Promise((resolve) => setTimeout(resolve, 500));
 
-	// Stream logs with color support, watching for startup complete
+	// 通过 SSH tail -f 流式监控日志，检测启动状态
 	const sshParts = pod.ssh.split(" ");
-	const sshCommand = sshParts[0]; // "ssh"
-	const sshArgs = sshParts.slice(1); // ["root@86.38.238.55"]
+	const sshCommand = sshParts[0];
+	const sshArgs = sshParts.slice(1);
 	const host = sshArgs[0].split("@")[1] || "localhost";
 	const tailCmd = `tail -f ~/.vllm_logs/${name}.log`;
 
-	// Build the full args array for spawn
 	const fullArgs = [...sshArgs, tailCmd];
 
 	const logProcess = spawn(sshCommand, fullArgs, {
-		stdio: ["inherit", "pipe", "pipe"], // capture stdout and stderr
+		stdio: ["inherit", "pipe", "pipe"],
 		env: { ...process.env, FORCE_COLOR: "1" },
 	});
 
@@ -288,27 +323,27 @@ WRAPPER
 	let startupFailed = false;
 	let failureReason = "";
 
-	// Handle Ctrl+C
+	// 处理 Ctrl+C 中断信号
 	const sigintHandler = () => {
 		interrupted = true;
 		logProcess.kill();
 	};
 	process.on("SIGINT", sigintHandler);
 
-	// Process log output line by line
+	// 逐行处理日志输出，检测启动成功或失败
 	const processOutput = (data: Buffer) => {
 		const lines = data.toString().split("\n");
 		for (const line of lines) {
 			if (line) {
-				console.log(line); // Echo the line to console
+				console.log(line);
 
-				// Check for startup complete message
+				// 检测 vLLM 启动完成标志
 				if (line.includes("Application startup complete")) {
 					startupComplete = true;
-					logProcess.kill(); // Stop tailing logs
+					logProcess.kill();
 				}
 
-				// Check for failure indicators
+				// 检测各种启动失败的情况
 				if (line.includes("Model runner exiting with code") && !line.includes("code 0")) {
 					startupFailed = true;
 					failureReason = "Model runner failed to start";
@@ -322,7 +357,7 @@ WRAPPER
 				if (line.includes("torch.OutOfMemoryError") || line.includes("CUDA out of memory")) {
 					startupFailed = true;
 					failureReason = "Out of GPU memory (OOM)";
-					// Don't kill immediately - let it show more error context
+					// OOM 错误不立即终止，等待更多上下文信息
 				}
 				if (line.includes("RuntimeError: Engine core initialization failed")) {
 					startupFailed = true;
@@ -340,17 +375,17 @@ WRAPPER
 	process.removeListener("SIGINT", sigintHandler);
 
 	if (startupFailed) {
-		// Model failed to start - clean up and report error
+		// 启动失败：清理配置并输出错误信息和建议
 		console.log(`\n${chalk.red(`✗ Model failed to start: ${failureReason}`)}`);
 
-		// Remove the failed model from config
+		// 从配置中移除失败的模型
 		const config = loadConfig();
 		delete config.pods[podName].models[name];
 		saveConfig(config);
 
 		console.log(chalk.yellow("\nModel has been removed from configuration."));
 
-		// Provide helpful suggestions based on failure reason
+		// 根据失败原因提供针对性建议
 		if (failureReason.includes("OOM") || failureReason.includes("memory")) {
 			console.log(`\n${chalk.bold("Suggestions:")}`);
 			console.log("  • Try reducing GPU memory utilization: --memory 50%");
@@ -363,7 +398,7 @@ WRAPPER
 		console.log(`\n${chalk.cyan(`Check full logs: pi ssh "tail -100 ~/.vllm_logs/${name}.log"`)}`);
 		process.exit(1);
 	} else if (startupComplete) {
-		// Model started successfully - output connection details
+		// 启动成功：输出连接详情和使用示例
 		console.log(`\n${chalk.green("✓ Model started successfully!")}`);
 		console.log(`\n${chalk.bold("Connection Details:")}`);
 		console.log(chalk.cyan("─".repeat(50)));
@@ -400,11 +435,13 @@ WRAPPER
 		console.log(chalk.cyan(`Monitor logs:     pi logs ${name}`));
 		console.log(chalk.cyan(`Stop model:       pi stop ${name}`));
 	} else if (interrupted) {
+		// 用户中断：模型仍在后台继续部署
 		console.log(chalk.yellow("\n\nStopped monitoring. Model deployment continues in background."));
 		console.log(chalk.cyan(`Chat with model: pi agent ${name} "Your message"`));
 		console.log(chalk.cyan(`Check status: pi logs ${name}`));
 		console.log(chalk.cyan(`Stop model: pi stop ${name}`));
 	} else {
+		// 日志流意外结束：模型可能仍在运行
 		console.log(chalk.yellow("\n\nLog stream ended. Model may still be running."));
 		console.log(chalk.cyan(`Chat with model: pi agent ${name} "Your message"`));
 		console.log(chalk.cyan(`Check status: pi logs ${name}`));
@@ -413,7 +450,10 @@ WRAPPER
 };
 
 /**
- * Stop a model
+ * 停止指定模型
+ * 终止远程进程并从本地配置中移除模型信息
+ * @param name - 模型别名
+ * @param options - 可选的 Pod 覆盖参数
  */
 export const stopModel = async (name: string, options: { pod?: string }) => {
 	const { name: podName, pod } = getPod(options.pod);
@@ -426,16 +466,15 @@ export const stopModel = async (name: string, options: { pod?: string }) => {
 
 	console.log(chalk.yellow(`Stopping model '${name}' on pod '${podName}'...`));
 
-	// Kill the script process and all its children
-	// Using pkill to kill the process and all children
+	// 终止 script 进程及其所有子进程
 	const killCmd = `
-		# Kill the script process and all its children
+		# 先终止子进程，再终止主进程
 		pkill -TERM -P ${model.pid} 2>/dev/null || true
 		kill ${model.pid} 2>/dev/null || true
 	`;
 	await sshExec(pod.ssh, killCmd);
 
-	// Remove from config
+	// 从本地配置中移除模型
 	const config = loadConfig();
 	delete config.pods[podName].models[name];
 	saveConfig(config);
@@ -444,7 +483,9 @@ export const stopModel = async (name: string, options: { pod?: string }) => {
 };
 
 /**
- * Stop all models on a pod
+ * 停止 Pod 上的所有模型
+ * 批量终止所有远程模型进程并清空本地模型配置
+ * @param options - 可选的 Pod 覆盖参数
  */
 export const stopAllModels = async (options: { pod?: string }) => {
 	const { name: podName, pod } = getPod(options.pod);
@@ -457,7 +498,7 @@ export const stopAllModels = async (options: { pod?: string }) => {
 
 	console.log(chalk.yellow(`Stopping ${modelNames.length} model(s) on pod '${podName}'...`));
 
-	// Kill all script processes and their children
+	// 批量终止所有模型的进程树
 	const pids = Object.values(pod.models).map((m) => m.pid);
 	const killCmd = `
 		for PID in ${pids.join(" ")}; do
@@ -467,7 +508,7 @@ export const stopAllModels = async (options: { pod?: string }) => {
 	`;
 	await sshExec(pod.ssh, killCmd);
 
-	// Clear all models from config
+	// 清空本地配置中的所有模型
 	const config = loadConfig();
 	config.pods[podName].models = {};
 	saveConfig(config);
@@ -476,7 +517,9 @@ export const stopAllModels = async (options: { pod?: string }) => {
 };
 
 /**
- * List all models
+ * 列出当前 Pod 上所有运行中的模型
+ * 显示模型详情并通过 SSH 验证远程进程的实际运行状态
+ * @param options - 可选的 Pod 覆盖参数
  */
 export const listModels = async (options: { pod?: string }) => {
 	const { name: podName, pod } = getPod(options.pod);
@@ -487,7 +530,7 @@ export const listModels = async (options: { pod?: string }) => {
 		return;
 	}
 
-	// Get pod SSH host for URL display
+	// 从 SSH 命令中提取主机地址，用于显示 API URL
 	const sshParts = pod.ssh.split(" ");
 	const host = sshParts.find((p) => p.includes("@"))?.split("@")[1] || "unknown";
 
@@ -505,21 +548,21 @@ export const listModels = async (options: { pod?: string }) => {
 		console.log(`    URL: ${chalk.cyan(`http://${host}:${model.port}/v1`)}`);
 	}
 
-	// Optionally verify processes are still running
+	// 通过 SSH 验证远程进程的实际状态
 	console.log("");
 	console.log("Verifying processes...");
 	let anyDead = false;
 	for (const name of modelNames) {
 		const model = pod.models[name];
-		// Check both the wrapper process and if vLLM is responding
+		// 检查包装进程是否存在，以及 vLLM 健康检查端点是否响应
 		const checkCmd = `
-			# Check if wrapper process exists
+			# 检查包装进程是否存在
 			if ps -p ${model.pid} > /dev/null 2>&1; then
-				# Process exists, now check if vLLM is responding
+				# 进程存在，检查 vLLM 是否正常响应
 				if curl -s -f http://localhost:${model.port}/health > /dev/null 2>&1; then
 					echo "running"
 				else
-					# Check if it's still starting up
+					# 检查日志中是否有错误信息，判断是崩溃还是仍在启动中
 					if tail -n 20 ~/.vllm_logs/${name}.log 2>/dev/null | grep -q "ERROR\\|Failed\\|Cuda error\\|died"; then
 						echo "crashed"
 					else
@@ -553,7 +596,10 @@ export const listModels = async (options: { pod?: string }) => {
 };
 
 /**
- * View model logs
+ * 流式查看模型日志
+ * 通过 SSH tail -f 实时输出指定模型的运行日志
+ * @param name - 模型别名
+ * @param options - 可选的 Pod 覆盖参数
  */
 export const viewLogs = async (name: string, options: { pod?: string }) => {
 	const { name: podName, pod } = getPod(options.pod);
@@ -568,10 +614,10 @@ export const viewLogs = async (name: string, options: { pod?: string }) => {
 	console.log(chalk.gray("Press Ctrl+C to stop"));
 	console.log("");
 
-	// Stream logs with color preservation
+	// 通过 SSH 流式传输日志，保留颜色输出
 	const sshParts = pod.ssh.split(" ");
-	const sshCommand = sshParts[0]; // "ssh"
-	const sshArgs = sshParts.slice(1); // ["root@86.38.238.55"]
+	const sshCommand = sshParts[0];
+	const sshArgs = sshParts.slice(1);
 	const tailCmd = `tail -f ~/.vllm_logs/${name}.log`;
 
 	const logProcess = spawn(sshCommand, [...sshArgs, tailCmd], {
@@ -582,14 +628,19 @@ export const viewLogs = async (name: string, options: { pod?: string }) => {
 		},
 	});
 
-	// Wait for process to exit
+	// 等待日志进程退出（通常是用户按 Ctrl+C）
 	await new Promise<void>((resolve) => {
 		logProcess.on("exit", () => resolve());
 	});
 };
 
 /**
- * Show known models and their hardware requirements
+ * 显示所有已知的预定义模型及其硬件兼容性
+ *
+ * 功能：
+ * - 如果有活跃 Pod，按兼容性分组显示（兼容/不兼容）
+ * - 如果没有活跃 Pod，显示所有模型及其最低硬件要求
+ * - 显示每个模型的 GPU 配置、名称和备注信息
  */
 export const showKnownModels = async () => {
 	const __filename = fileURLToPath(import.meta.url);
@@ -598,14 +649,14 @@ export const showKnownModels = async () => {
 	const modelsJson = JSON.parse(readFileSync(modelsJsonPath, "utf-8"));
 	const models = modelsJson.models;
 
-	// Get active pod info if available
+	// 获取活跃 Pod 信息，用于兼容性检查
 	const activePod = getActivePod();
 	let podGpuCount = 0;
 	let podGpuType = "";
 
 	if (activePod) {
 		podGpuCount = activePod.pod.gpus.length;
-		// Extract GPU type from name (e.g., "NVIDIA H200" -> "H200")
+		// 从 GPU 名称中提取型号（如 "NVIDIA H200" -> "H200"）
 		podGpuType = activePod.pod.gpus[0]?.name?.replace("NVIDIA", "")?.trim()?.split(" ")[0] || "";
 
 		console.log(chalk.bold(`Known Models for ${activePod.name} (${podGpuCount}x ${podGpuType || "GPU"}):\n`));
@@ -616,12 +667,13 @@ export const showKnownModels = async () => {
 
 	console.log("Usage: pi start <model> --name <name> [options]\n");
 
-	// Group models by compatibility and family
+	// 按模型系列分组，区分兼容和不兼容的模型
 	const compatible: Record<string, Array<{ id: string; name: string; config: string; notes?: string }>> = {};
 	const incompatible: Record<string, Array<{ id: string; name: string; minGpu: string; notes?: string }>> = {};
 
 	for (const [modelId, info] of Object.entries(models)) {
 		const modelInfo = info as any;
+		// 按模型名称的第一个短横线前的部分进行分组（如 "Llama-3" -> "Llama"）
 		const family = modelInfo.name.split("-")[0] || "Other";
 
 		let isCompatible = false;
@@ -630,10 +682,10 @@ export const showKnownModels = async () => {
 		let minNotes: string | undefined;
 
 		if (modelInfo.configs && modelInfo.configs.length > 0) {
-			// Sort configs by GPU count to find minimum
+			// 按 GPU 数量排序，找到最低硬件要求
 			const sortedConfigs = [...modelInfo.configs].sort((a: any, b: any) => (a.gpuCount || 1) - (b.gpuCount || 1));
 
-			// Find minimum requirements
+			// 获取最低硬件要求信息
 			const minConfig = sortedConfigs[0];
 			const minGpuCount = minConfig.gpuCount || 1;
 			const gpuTypes = minConfig.gpuTypes?.join("/") || "H100/H200";
@@ -646,16 +698,15 @@ export const showKnownModels = async () => {
 
 			minNotes = minConfig.notes || modelInfo.notes;
 
-			// Check compatibility with active pod
+			// 检查与当前活跃 Pod 的兼容性
 			if (activePod && podGpuCount > 0) {
-				// Find best matching config for this pod
 				for (const config of sortedConfigs) {
 					const configGpuCount = config.gpuCount || 1;
 					const configGpuTypes = config.gpuTypes || [];
 
-					// Check if we have enough GPUs
+					// 检查 GPU 数量是否足够
 					if (configGpuCount <= podGpuCount) {
-						// Check if GPU type matches (if specified)
+						// 检查 GPU 类型是否匹配
 						if (
 							configGpuTypes.length === 0 ||
 							configGpuTypes.some((type: string) => podGpuType.includes(type) || type.includes(podGpuType))
@@ -680,6 +731,7 @@ export const showKnownModels = async () => {
 			notes: minNotes,
 		};
 
+		// 根据兼容性分类
 		if (activePod && isCompatible) {
 			if (!compatible[family]) {
 				compatible[family] = [];
@@ -693,7 +745,7 @@ export const showKnownModels = async () => {
 		}
 	}
 
-	// Display compatible models first
+	// 优先显示兼容的模型
 	if (activePod && Object.keys(compatible).length > 0) {
 		console.log(chalk.green.bold("✓ Compatible Models:\n"));
 
@@ -715,7 +767,7 @@ export const showKnownModels = async () => {
 		}
 	}
 
-	// Display incompatible models
+	// 显示不兼容的模型
 	if (Object.keys(incompatible).length > 0) {
 		if (activePod && Object.keys(compatible).length > 0) {
 			console.log(chalk.red.bold("✗ Incompatible Models (need more/different GPUs):\n"));
@@ -740,7 +792,7 @@ export const showKnownModels = async () => {
 					console.log(chalk.gray(`    Note: ${model.notes}`));
 				}
 				if (activePod) {
-					console.log(""); // Less verbose for incompatible models when filtered
+					console.log("");
 				} else {
 					console.log("");
 				}

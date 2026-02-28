@@ -1,3 +1,10 @@
+/**
+ * @file ProvidersModelsTab.ts
+ * @description 提供商和模型管理设置标签页（<providers-models-tab>）。
+ * 展示云端提供商的 API Key 配置和自定义提供商管理，
+ * 支持添加/编辑/删除自定义提供商和刷新模型发现。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import { Select } from "@mariozechner/mini-lit/dist/Select.js";
 import { getProviders } from "@mariozechner/pi-ai";
@@ -15,6 +22,10 @@ import { discoverModels } from "../utils/model-discovery.js";
 import { CustomProviderDialog } from "./CustomProviderDialog.js";
 import { SettingsTab } from "./SettingsDialog.js";
 
+/**
+ * 提供商和模型管理标签页 Web Component。
+ * 分为云端提供商（API Key 管理）和自定义提供商（本地/远程服务器管理）两部分。
+ */
 @customElement("providers-models-tab")
 export class ProvidersModelsTab extends SettingsTab {
 	@state() private customProviders: CustomProvider[] = [];

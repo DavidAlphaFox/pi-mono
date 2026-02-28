@@ -1,3 +1,10 @@
+/**
+ * @file SettingsDialog.ts
+ * @description 设置对话框及其标签页组件。
+ * 包含 SettingsTab 基类、ApiKeysTab（API Key 管理）、
+ * ProxyTab（代理设置）和 SettingsDialog（选项卡式设置对话框）。
+ */
+
 import { i18n } from "@mariozechner/mini-lit";
 import { Dialog, DialogContent, DialogHeader } from "@mariozechner/mini-lit/dist/Dialog.js";
 import { Input } from "@mariozechner/mini-lit/dist/Input.js";
@@ -9,7 +16,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "../components/ProviderKeyInput.js";
 import { getAppStorage } from "../storage/app-storage.js";
 
-// Base class for settings tabs
+/** 设置标签页抽象基类 */
 export abstract class SettingsTab extends LitElement {
 	abstract getTabName(): string;
 
@@ -18,7 +25,7 @@ export abstract class SettingsTab extends LitElement {
 	}
 }
 
-// API Keys Tab
+/** API Key 管理标签页 */
 @customElement("api-keys-tab")
 export class ApiKeysTab extends SettingsTab {
 	getTabName(): string {

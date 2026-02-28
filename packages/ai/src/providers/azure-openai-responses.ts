@@ -1,3 +1,13 @@
+/**
+ * @file Azure OpenAI Responses API 提供商
+ *
+ * 本文件实现了 Azure OpenAI 平台上 Responses API 的流式调用，支持：
+ * - Azure 资源名称或自定义 baseUrl 配置
+ * - 部署名称映射（AZURE_OPENAI_DEPLOYMENT_NAME_MAP 环境变量）
+ * - 推理摘要（Reasoning Summary）和加密推理内容
+ * - 共享 openai-responses-shared 的流处理逻辑
+ */
+
 import { AzureOpenAI } from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 import { getEnvApiKey } from "../env-api-keys.js";
@@ -39,7 +49,7 @@ function resolveDeploymentName(model: Model<"azure-openai-responses">, options?:
 	return mappedDeployment || model.id;
 }
 
-// Azure OpenAI Responses-specific options
+/** Azure OpenAI Responses API 流式调用选项 */
 export interface AzureOpenAIResponsesOptions extends StreamOptions {
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
 	reasoningSummary?: "auto" | "detailed" | "concise" | null;
@@ -49,9 +59,7 @@ export interface AzureOpenAIResponsesOptions extends StreamOptions {
 	azureDeploymentName?: string;
 }
 
-/**
- * Generate function for Azure OpenAI Responses API
- */
+/** Azure OpenAI Responses API 的底层流式调用函数 */
 export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses", AzureOpenAIResponsesOptions> = (
 	model: Model<"azure-openai-responses">,
 	context: Context,
@@ -117,6 +125,7 @@ export const streamAzureOpenAIResponses: StreamFunction<"azure-openai-responses"
 	return stream;
 };
 
+/** Azure OpenAI Responses API 的简化版流式调用函数 */
 export const streamSimpleAzureOpenAIResponses: StreamFunction<"azure-openai-responses", SimpleStreamOptions> = (
 	model: Model<"azure-openai-responses">,
 	context: Context,

@@ -1,8 +1,18 @@
+/**
+ * 自定义编辑器组件。
+ *
+ * 该文件扩展了基础编辑器，添加了应用级快捷键处理，
+ * 包括中断、退出、图片粘贴、扩展快捷键等功能。
+ * 是交互模式下用户输入的主要组件。
+ */
+
 import { Editor, type EditorOptions, type EditorTheme, type TUI } from "@mariozechner/pi-tui";
 import type { AppAction, KeybindingsManager } from "../../../core/keybindings.js";
 
 /**
- * Custom editor that handles app-level keybindings for coding-agent.
+ * 自定义编辑器类，处理编码代理的应用级快捷键。
+ * 在标准编辑器功能之上，增加了对应用操作（如中断、退出）和
+ * 扩展注册的快捷键的支持。
  */
 export class CustomEditor extends Editor {
 	private keybindings: KeybindingsManager;

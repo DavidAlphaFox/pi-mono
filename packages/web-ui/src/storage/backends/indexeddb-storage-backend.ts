@@ -1,8 +1,16 @@
+/**
+ * @file indexeddb-storage-backend.ts
+ * @description IndexedDB 存储后端实现。
+ * 实现 StorageBackend 接口，提供基于 IndexedDB 的多 Store 键值存储，
+ * 支持事务、索引查询、配额管理和持久化权限请求。
+ */
+
 import type { IndexedDBConfig, StorageBackend, StorageTransaction } from "../types.js";
 
 /**
- * IndexedDB implementation of StorageBackend.
- * Provides multi-store key-value storage with transactions and quota management.
+ * IndexedDB 存储后端。
+ * 管理 IndexedDB 数据库连接、Object Store 创建和升级，
+ * 实现所有 StorageBackend 接口方法。
  */
 export class IndexedDBStorageBackend implements StorageBackend {
 	private dbPromise: Promise<IDBDatabase> | null = null;

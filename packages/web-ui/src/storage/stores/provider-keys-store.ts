@@ -1,8 +1,15 @@
+/**
+ * @file provider-keys-store.ts
+ * @description LLM 提供商 API Key Store。
+ * 管理各 LLM 提供商（Anthropic、OpenAI 等）的 API Key 存取和变更通知。
+ */
+
 import { Store } from "../store.js";
 import type { StoreConfig } from "../types.js";
 
 /**
- * Store for LLM provider API keys (Anthropic, OpenAI, etc.).
+ * API Key Store。
+ * 以提供商名称为键存储 API Key，支持变更订阅。
  */
 export class ProviderKeysStore extends Store {
 	getConfig(): StoreConfig {

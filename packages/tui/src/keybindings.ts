@@ -1,10 +1,23 @@
+/**
+ * @file 编辑器快捷键绑定管理
+ *
+ * 本文件定义了编辑器支持的所有动作类型（EditorAction），
+ * 以及对应的默认快捷键绑定。用户可以通过 EditorKeybindingsConfig
+ * 自定义快捷键映射。
+ *
+ * EditorKeybindingsManager 负责管理快捷键配置，支持：
+ * - 基于默认配置的初始化
+ * - 用户自定义配置的覆盖
+ * - 输入数据与动作的匹配检查
+ */
+
 import { type KeyId, matchesKey } from "./keys.js";
 
 /**
- * Editor actions that can be bound to keys.
+ * 可绑定到快捷键的编辑器动作类型
  */
 export type EditorAction =
-	// Cursor movement
+	// 光标移动
 	| "cursorUp"
 	| "cursorDown"
 	| "cursorLeft"
@@ -17,34 +30,34 @@ export type EditorAction =
 	| "jumpBackward"
 	| "pageUp"
 	| "pageDown"
-	// Deletion
+	// 删除操作
 	| "deleteCharBackward"
 	| "deleteCharForward"
 	| "deleteWordBackward"
 	| "deleteWordForward"
 	| "deleteToLineStart"
 	| "deleteToLineEnd"
-	// Text input
+	// 文本输入
 	| "newLine"
 	| "submit"
 	| "tab"
-	// Selection/autocomplete
+	// 选择/自动补全
 	| "selectUp"
 	| "selectDown"
 	| "selectPageUp"
 	| "selectPageDown"
 	| "selectConfirm"
 	| "selectCancel"
-	// Clipboard
+	// 剪贴板
 	| "copy"
-	// Kill ring
+	// Kill 环（Emacs 风格的剪切/粘贴）
 	| "yank"
 	| "yankPop"
-	// Undo
+	// 撤销
 	| "undo"
-	// Tool output
+	// 工具输出展开
 	| "expandTools"
-	// Session
+	// 会话管理
 	| "toggleSessionPath"
 	| "toggleSessionSort"
 	| "renameSession"
@@ -55,14 +68,15 @@ export type EditorAction =
 export type { KeyId };
 
 /**
- * Editor keybindings configuration.
+ * 编辑器快捷键配置类型。
+ * 每个动作可以绑定单个按键或多个按键。
  */
 export type EditorKeybindingsConfig = {
 	[K in EditorAction]?: KeyId | KeyId[];
 };
 
 /**
- * Default editor keybindings.
+ * 默认编辑器快捷键绑定配置
  */
 export const DEFAULT_EDITOR_KEYBINDINGS: Required<EditorKeybindingsConfig> = {
 	// Cursor movement
@@ -114,9 +128,11 @@ export const DEFAULT_EDITOR_KEYBINDINGS: Required<EditorKeybindingsConfig> = {
 };
 
 /**
- * Manages keybindings for the editor.
+ * 编辑器快捷键管理器。
+ * 管理动作到按键的映射，支持默认配置和用户自定义覆盖。
  */
 export class EditorKeybindingsManager {
+	/** 动作到按键数组的映射 */
 	private actionToKeys: Map<EditorAction, KeyId[]>;
 
 	constructor(config: EditorKeybindingsConfig = {}) {
@@ -142,7 +158,7 @@ export class EditorKeybindingsManager {
 	}
 
 	/**
-	 * Check if input matches a specific action.
+	 * 检查输入是否匹配指定的动作。
 	 */
 	matches(data: string, action: EditorAction): boolean {
 		const keys = this.actionToKeys.get(action);
@@ -154,23 +170,24 @@ export class EditorKeybindingsManager {
 	}
 
 	/**
-	 * Get keys bound to an action.
+	 * 获取绑定到指定动作的所有按键。
 	 */
 	getKeys(action: EditorAction): KeyId[] {
 		return this.actionToKeys.get(action) ?? [];
 	}
 
 	/**
-	 * Update configuration.
+	 * 更新快捷键配置。
 	 */
 	setConfig(config: EditorKeybindingsConfig): void {
 		this.buildMaps(config);
 	}
 }
 
-// Global instance
+// 全局单例
 let globalEditorKeybindings: EditorKeybindingsManager | null = null;
 
+/** 获取全局编辑器快捷键管理器实例（懒初始化） */
 export function getEditorKeybindings(): EditorKeybindingsManager {
 	if (!globalEditorKeybindings) {
 		globalEditorKeybindings = new EditorKeybindingsManager();
@@ -178,6 +195,7 @@ export function getEditorKeybindings(): EditorKeybindingsManager {
 	return globalEditorKeybindings;
 }
 
+/** 设置全局编辑器快捷键管理器实例 */
 export function setEditorKeybindings(manager: EditorKeybindingsManager): void {
 	globalEditorKeybindings = manager;
 }

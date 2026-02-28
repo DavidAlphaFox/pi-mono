@@ -1,3 +1,10 @@
+/**
+ * @file app-storage.ts
+ * @description 应用存储管理器。
+ * 提供对所有存储操作的高级 API，聚合设置、API Key、会话和自定义提供商等 Store。
+ * 通过全局单例模式管理 AppStorage 实例。
+ */
+
 import type { CustomProvidersStore } from "./stores/custom-providers-store.js";
 import type { ProviderKeysStore } from "./stores/provider-keys-store.js";
 import type { SessionsStore } from "./stores/sessions-store.js";
@@ -5,8 +12,9 @@ import type { SettingsStore } from "./stores/settings-store.js";
 import type { StorageBackend } from "./types.js";
 
 /**
- * High-level storage API providing access to all storage operations.
- * Subclasses can extend this to add domain-specific stores.
+ * 应用存储管理器。
+ * 聚合所有 Store（settings、providerKeys、sessions、customProviders），
+ * 提供存储配额查询和持久化权限请求功能。子类可扩展以添加自定义 Store。
  */
 export class AppStorage {
 	readonly backend: StorageBackend;
@@ -38,12 +46,12 @@ export class AppStorage {
 	}
 }
 
-// Global instance management
+// 全局实例管理
 let globalAppStorage: AppStorage | null = null;
 
 /**
- * Get the global AppStorage instance.
- * Throws if not initialized.
+ * 获取全局 AppStorage 实例。
+ * 若未初始化则抛出错误。
  */
 export function getAppStorage(): AppStorage {
 	if (!globalAppStorage) {
@@ -53,7 +61,7 @@ export function getAppStorage(): AppStorage {
 }
 
 /**
- * Set the global AppStorage instance.
+ * 设置全局 AppStorage 实例。
  */
 export function setAppStorage(storage: AppStorage): void {
 	globalAppStorage = storage;

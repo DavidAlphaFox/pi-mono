@@ -1,3 +1,10 @@
+/**
+ * @file ConsoleBlock.ts
+ * @description 控制台输出块组件（<console-block>）。
+ * 以代码块形式展示控制台输出内容，支持默认和错误两种变体样式，
+ * 并提供一键复制功能。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import { LitElement } from "lit";
 import { property, state } from "lit/decorators.js";
@@ -5,6 +12,10 @@ import { html } from "lit/html.js";
 import { Check, Copy } from "lucide";
 import { i18n } from "../utils/i18n.js";
 
+/**
+ * 控制台输出块 Web Component。
+ * 显示预格式化的控制台文本，右上角有复制按钮。
+ */
 export class ConsoleBlock extends LitElement {
 	@property() content: string = "";
 	@property() variant: "default" | "error" = "default";

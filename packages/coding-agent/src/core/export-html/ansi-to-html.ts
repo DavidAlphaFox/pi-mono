@@ -1,17 +1,17 @@
 /**
- * ANSI escape code to HTML converter.
+ * ANSI 转义码到 HTML 的转换器
  *
- * Converts terminal ANSI color/style codes to HTML with inline styles.
- * Supports:
- * - Standard foreground colors (30-37) and bright variants (90-97)
- * - Standard background colors (40-47) and bright variants (100-107)
- * - 256-color palette (38;5;N and 48;5;N)
- * - RGB true color (38;2;R;G;B and 48;2;R;G;B)
- * - Text styles: bold (1), dim (2), italic (3), underline (4)
- * - Reset (0)
+ * 将终端 ANSI 颜色/样式转义码转换为带内联样式的 HTML。
+ * 支持的功能：
+ * - 标准前景色（30-37）和亮色变体（90-97）
+ * - 标准背景色（40-47）和亮色变体（100-107）
+ * - 256 色调色板（38;5;N 和 48;5;N）
+ * - RGB 真彩色（38;2;R;G;B 和 48;2;R;G;B）
+ * - 文本样式：粗体（1）、暗淡（2）、斜体（3）、下划线（4）
+ * - 重置（0）
  */
 
-// Standard ANSI color palette (0-15)
+// 标准 ANSI 颜色调色板（0-15）
 const ANSI_COLORS = [
 	"#000000", // 0: black
 	"#800000", // 1: red
@@ -32,7 +32,7 @@ const ANSI_COLORS = [
 ];
 
 /**
- * Convert 256-color index to hex.
+ * 将 256 色索引转换为十六进制颜色值。
  */
 function color256ToHex(index: number): string {
 	// Standard colors (0-15)
@@ -58,7 +58,7 @@ function color256ToHex(index: number): string {
 }
 
 /**
- * Escape HTML special characters.
+ * 转义 HTML 特殊字符。
  */
 function escapeHtml(text: string): string {
 	return text
@@ -69,6 +69,7 @@ function escapeHtml(text: string): string {
 		.replace(/'/g, "&#039;");
 }
 
+/** 文本样式状态 */
 interface TextStyle {
 	fg: string | null;
 	bg: string | null;
@@ -78,6 +79,7 @@ interface TextStyle {
 	underline: boolean;
 }
 
+/** 创建空的文本样式 */
 function createEmptyStyle(): TextStyle {
 	return {
 		fg: null,
@@ -89,6 +91,7 @@ function createEmptyStyle(): TextStyle {
 	};
 }
 
+/** 将文本样式转换为内联 CSS 字符串 */
 function styleToInlineCSS(style: TextStyle): string {
 	const parts: string[] = [];
 	if (style.fg) parts.push(`color:${style.fg}`);
@@ -100,12 +103,13 @@ function styleToInlineCSS(style: TextStyle): string {
 	return parts.join(";");
 }
 
+/** 检查文本样式是否有任何活跃的样式属性 */
 function hasStyle(style: TextStyle): boolean {
 	return style.fg !== null || style.bg !== null || style.bold || style.dim || style.italic || style.underline;
 }
 
 /**
- * Parse ANSI SGR (Select Graphic Rendition) codes and update style.
+ * 解析 ANSI SGR（选择图形表现）代码并更新样式状态。
  */
 function applySgrCode(params: number[], style: TextStyle): void {
 	let i = 0;
@@ -189,11 +193,11 @@ function applySgrCode(params: number[], style: TextStyle): void {
 	}
 }
 
-// Match ANSI escape sequences: ESC[ followed by params and ending with 'm'
+// 匹配 ANSI 转义序列：ESC[ 后跟参数，以 'm' 结尾
 const ANSI_REGEX = /\x1b\[([\d;]*)m/g;
 
 /**
- * Convert ANSI-escaped text to HTML with inline styles.
+ * 将包含 ANSI 转义码的文本转换为带内联样式的 HTML。
  */
 export function ansiToHtml(text: string): string {
 	const style = createEmptyStyle();
@@ -250,8 +254,8 @@ export function ansiToHtml(text: string): string {
 }
 
 /**
- * Convert array of ANSI-escaped lines to HTML.
- * Each line is wrapped in a div element.
+ * 将 ANSI 转义文本的行数组转换为 HTML。
+ * 每行被包装在一个 div 元素中。
  */
 export function ansiLinesToHtml(lines: string[]): string {
 	return lines.map((line) => `<div class="ansi-line">${ansiToHtml(line) || "&nbsp;"}</div>`).join("\n");

@@ -1,9 +1,20 @@
-// Main chat interface
+/**
+ * @file index.ts
+ * @description Web UI 组件库的主入口文件（Barrel Export）。
+ * 统一导出所有公共 API，包括组件、对话框、工具、存储、工具提示词和工具函数。
+ * 使用 mini-lit Web Components 构建 AI 聊天界面。
+ */
 
+// ============================================================================
+// 核心类型和顶层组件
+// ============================================================================
 export type { Agent, AgentMessage, AgentState, ThinkingLevel } from "@mariozechner/pi-agent-core";
 export type { Model } from "@mariozechner/pi-ai";
 export { ChatPanel } from "./ChatPanel.js";
-// Components
+
+// ============================================================================
+// UI 组件
+// ============================================================================
 export { AgentInterface } from "./components/AgentInterface.js";
 export { AttachmentTile } from "./components/AttachmentTile.js";
 export { ConsoleBlock } from "./components/ConsoleBlock.js";
@@ -12,7 +23,8 @@ export { ExpandableSection } from "./components/ExpandableSection.js";
 export { Input } from "./components/Input.js";
 export { MessageEditor } from "./components/MessageEditor.js";
 export { MessageList } from "./components/MessageList.js";
-// Message components
+
+// 消息组件及类型
 export type { ArtifactMessage, UserMessageWithAttachments } from "./components/Messages.js";
 export {
 	AbortedMessage,
@@ -25,7 +37,7 @@ export {
 	ToolMessageDebugView,
 	UserMessage,
 } from "./components/Messages.js";
-// Message renderer registry
+// 消息渲染器注册表
 export {
 	getMessageRenderer,
 	type MessageRenderer,
@@ -41,7 +53,7 @@ export {
 	type SandboxUrlProvider,
 } from "./components/SandboxedIframe.js";
 export { StreamingMessageContainer } from "./components/StreamingMessageContainer.js";
-// Sandbox Runtime Providers
+// 沙箱运行时提供者（Sandbox Runtime Providers）
 export { ArtifactsRuntimeProvider } from "./components/sandbox/ArtifactsRuntimeProvider.js";
 export { AttachmentsRuntimeProvider } from "./components/sandbox/AttachmentsRuntimeProvider.js";
 export { type ConsoleLog, ConsoleRuntimeProvider } from "./components/sandbox/ConsoleRuntimeProvider.js";
@@ -55,19 +67,19 @@ export type { SandboxRuntimeProvider } from "./components/sandbox/SandboxRuntime
 export { ThinkingBlock } from "./components/ThinkingBlock.js";
 export { ApiKeyPromptDialog } from "./dialogs/ApiKeyPromptDialog.js";
 export { AttachmentOverlay } from "./dialogs/AttachmentOverlay.js";
-// Dialogs
+// 对话框组件
 export { ModelSelector } from "./dialogs/ModelSelector.js";
 export { PersistentStorageDialog } from "./dialogs/PersistentStorageDialog.js";
 export { ProvidersModelsTab } from "./dialogs/ProvidersModelsTab.js";
 export { SessionListDialog } from "./dialogs/SessionListDialog.js";
 export { ApiKeysTab, ProxyTab, SettingsDialog, SettingsTab } from "./dialogs/SettingsDialog.js";
-// Prompts
+// 工具提示词模板
 export {
 	ARTIFACTS_RUNTIME_PROVIDER_DESCRIPTION_RO,
 	ARTIFACTS_RUNTIME_PROVIDER_DESCRIPTION_RW,
 	ATTACHMENTS_RUNTIME_DESCRIPTION,
 } from "./prompts/prompts.js";
-// Storage
+// 存储层（Storage）
 export { AppStorage, getAppStorage, setAppStorage } from "./storage/app-storage.js";
 export { IndexedDBStorageBackend } from "./storage/backends/indexeddb-storage-backend.js";
 export { Store } from "./storage/store.js";
@@ -89,7 +101,7 @@ export type {
 	StorageTransaction,
 	StoreConfig,
 } from "./storage/types.js";
-// Artifacts
+// 制品系统（Artifacts）
 export { ArtifactElement } from "./tools/artifacts/ArtifactElement.js";
 export { ArtifactPill } from "./tools/artifacts/ArtifactPill.js";
 export { type Artifact, ArtifactsPanel, type ArtifactsParams } from "./tools/artifacts/artifacts.js";
@@ -100,18 +112,18 @@ export { MarkdownArtifact } from "./tools/artifacts/MarkdownArtifact.js";
 export { SvgArtifact } from "./tools/artifacts/SvgArtifact.js";
 export { TextArtifact } from "./tools/artifacts/TextArtifact.js";
 export { createExtractDocumentTool, extractDocumentTool } from "./tools/extract-document.js";
-// Tools
+// 工具系统
 export { getToolRenderer, registerToolRenderer, renderTool, setShowJsonMode } from "./tools/index.js";
 export { createJavaScriptReplTool, javascriptReplTool } from "./tools/javascript-repl.js";
 export { renderCollapsibleHeader, renderHeader } from "./tools/renderer-registry.js";
 export { BashRenderer } from "./tools/renderers/BashRenderer.js";
 export { CalculateRenderer } from "./tools/renderers/CalculateRenderer.js";
-// Tool renderers
+// 工具渲染器
 export { DefaultRenderer } from "./tools/renderers/DefaultRenderer.js";
 export { GetCurrentTimeRenderer } from "./tools/renderers/GetCurrentTimeRenderer.js";
 export type { ToolRenderer, ToolRenderResult } from "./tools/types.js";
 export type { Attachment } from "./utils/attachment-utils.js";
-// Utils
+// 工具函数
 export { loadAttachment } from "./utils/attachment-utils.js";
 export { clearAuthToken, getAuthToken } from "./utils/auth-token.js";
 export { formatCost, formatModelCost, formatTokenCount, formatUsage } from "./utils/format.js";

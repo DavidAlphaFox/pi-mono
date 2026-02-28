@@ -1,8 +1,15 @@
+/**
+ * @file storage/types.ts
+ * @description 存储层类型定义。
+ * 定义 StorageBackend（存储后端抽象）、StorageTransaction（事务接口）、
+ * SessionMetadata/SessionData（会话数据结构）、IndexedDB 配置等核心类型。
+ */
+
 import type { AgentMessage, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
 
 /**
- * Transaction interface for atomic operations across stores.
+ * 事务接口，用于跨 Store 的原子操作。
  */
 export interface StorageTransaction {
 	/**
@@ -22,9 +29,8 @@ export interface StorageTransaction {
 }
 
 /**
- * Base interface for all storage backends.
- * Multi-store key-value storage abstraction that can be implemented
- * by IndexedDB, remote APIs, or any other multi-collection storage system.
+ * 存储后端基础接口。
+ * 多 Store 键值存储抽象，可由 IndexedDB、远程 API 或其他多集合存储系统实现。
  */
 export interface StorageBackend {
 	/**
@@ -88,8 +94,8 @@ export interface StorageBackend {
 }
 
 /**
- * Lightweight session metadata for listing and searching.
- * Stored separately from full session data for performance.
+ * 轻量级会话元数据，用于列表展示和搜索。
+ * 与完整会话数据分开存储，提升性能。
  */
 export interface SessionMetadata {
 	/** Unique session identifier (UUID v4) */
@@ -141,8 +147,8 @@ export interface SessionMetadata {
 }
 
 /**
- * Full session data including all messages.
- * Only loaded when user opens a specific session.
+ * 完整会话数据，包含所有消息。
+ * 仅在用户打开特定会话时加载。
  */
 export interface SessionData {
 	/** Unique session identifier (UUID v4) */
@@ -168,7 +174,7 @@ export interface SessionData {
 }
 
 /**
- * Configuration for IndexedDB backend.
+ * IndexedDB 后端配置。
  */
 export interface IndexedDBConfig {
 	/** Database name */
@@ -180,7 +186,7 @@ export interface IndexedDBConfig {
 }
 
 /**
- * Configuration for an IndexedDB object store.
+ * IndexedDB Object Store 配置。
  */
 export interface StoreConfig {
 	/** Store name */
@@ -194,7 +200,7 @@ export interface StoreConfig {
 }
 
 /**
- * Configuration for an IndexedDB index.
+ * IndexedDB 索引配置。
  */
 export interface IndexConfig {
 	/** Index name */

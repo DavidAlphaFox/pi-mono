@@ -1,3 +1,10 @@
+/**
+ * @file Console.ts
+ * @description HTML 制品的控制台日志查看器组件（<artifact-console>）。
+ * 展示 HTML 制品运行时产生的 console.log/error 输出，
+ * 支持自动滚动、展开/折叠和一键复制。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import "@mariozechner/mini-lit/dist/CopyButton.js";
 import { html, LitElement, type TemplateResult } from "lit";
@@ -7,6 +14,7 @@ import { repeat } from "lit/directives/repeat.js";
 import { ChevronDown, ChevronRight, ChevronsDown, Lock } from "lucide";
 import { i18n } from "../../utils/i18n.js";
 
+/** 日志条目接口 */
 interface LogEntry {
 	type: "log" | "error";
 	text: string;

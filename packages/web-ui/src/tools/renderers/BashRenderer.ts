@@ -1,3 +1,9 @@
+/**
+ * @file BashRenderer.ts
+ * @description Bash 命令工具渲染器。
+ * 展示 Bash 命令及其控制台输出，使用终端图标。
+ */
+
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { html } from "lit";
 import { SquareTerminal } from "lucide";
@@ -5,11 +11,12 @@ import { i18n } from "../../utils/i18n.js";
 import { renderHeader } from "../renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "../types.js";
 
+/** Bash 工具参数 */
 interface BashParams {
 	command: string;
 }
 
-// Bash tool has undefined details (only uses output)
+/** Bash 命令渲染器，展示命令行和执行输出 */
 export class BashRenderer implements ToolRenderer<BashParams, undefined> {
 	render(params: BashParams | undefined, result: ToolResultMessage<undefined> | undefined): ToolRenderResult {
 		const state = result ? (result.isError ? "error" : "complete") : "inprogress";

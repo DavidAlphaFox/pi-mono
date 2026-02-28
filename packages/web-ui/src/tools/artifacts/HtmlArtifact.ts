@@ -1,3 +1,10 @@
+/**
+ * @file HtmlArtifact.ts
+ * @description HTML 制品展示组件（<html-artifact>）。
+ * 在沙箱 iframe 中渲染 HTML 内容，支持预览/代码切换、
+ * 控制台日志查看、刷新、复制和下载功能。
+ */
+
 import hljs from "highlight.js";
 import { html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";

@@ -1,7 +1,15 @@
+/**
+ * @file 上下文溢出检测
+ *
+ * 本文件负责检测 AI 模型响应中的上下文窗口溢出错误。
+ * 支持 20+ 提供商的错误消息模式匹配，以及静默溢出检测（如 z.ai）。
+ * 用于在输入超出模型上下文窗口时提供清晰的错误提示。
+ */
+
 import type { AssistantMessage } from "../types.js";
 
 /**
- * Regex patterns to detect context overflow errors from different providers.
+ * 用于检测各提供商上下文溢出错误的正则表达式模式。
  *
  * These patterns match error messages returned when the input exceeds
  * the model's context window.

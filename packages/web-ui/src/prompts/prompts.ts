@@ -1,10 +1,13 @@
 /**
- * Centralized tool prompts/descriptions.
- * Each prompt is either a string constant or a template function.
+ * @file prompts.ts
+ * @description 集中管理的工具提示词/描述模板。
+ * 为 JavaScript REPL、制品工具、运行时提供者和文档提取工具
+ * 定义 LLM 可见的描述文本，作为工具定义的 description 字段。
+ * 每个提示词是字符串常量或模板函数。
  */
 
 // ============================================================================
-// JavaScript REPL Tool
+// JavaScript REPL 工具
 // ============================================================================
 
 export const JAVASCRIPT_REPL_TOOL_DESCRIPTION = (runtimeProviderDescriptions: string[]) => `# JavaScript REPL
@@ -64,7 +67,7 @@ ${runtimeProviderDescriptions.join("\n\n")}
 `;
 
 // ============================================================================
-// Artifacts Tool
+// 制品工具（Artifacts Tool）
 // ============================================================================
 
 export const ARTIFACTS_TOOL_DESCRIPTION = (runtimeProviderDescriptions: string[]) => `# Artifacts
@@ -144,7 +147,7 @@ ${runtimeProviderDescriptions.join("\n\n")}
 `;
 
 // ============================================================================
-// Artifacts Runtime Provider
+// 制品运行时提供者（Artifacts Runtime Provider）
 // ============================================================================
 
 export const ARTIFACTS_RUNTIME_PROVIDER_DESCRIPTION_RW = `
@@ -228,7 +231,7 @@ document.body.appendChild(img);
 `;
 
 // ============================================================================
-// Attachments Runtime Provider
+// 附件运行时提供者（Attachments Runtime Provider）
 // ============================================================================
 
 export const ATTACHMENTS_RUNTIME_DESCRIPTION = `
@@ -265,7 +268,7 @@ const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 `;
 
 // ============================================================================
-// Extract Document Tool
+// 文档提取工具（Extract Document Tool）
 // ============================================================================
 
 export const EXTRACT_DOCUMENT_DESCRIPTION = `# Extract Document

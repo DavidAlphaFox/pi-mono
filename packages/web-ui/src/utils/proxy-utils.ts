@@ -1,20 +1,25 @@
+/**
+ * @file proxy-utils.ts
+ * @description CORS 代理工具函数。
+ * 在浏览器环境中，某些 LLM 提供商的 API 不支持跨域请求（CORS），
+ * 本模块提供统一的代理决策逻辑、代理应用函数、CORS 错误检测以及流式请求封装。
+ */
+
 import type { Api, Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { streamSimple } from "@mariozechner/pi-ai";
 
 /**
- * Centralized proxy decision logic.
+ * 判断指定提供商和 API Key 组合是否需要使用 CORS 代理。
  *
- * Determines whether to use a CORS proxy for LLM API requests based on:
- * - Provider name
- * - API key pattern (for providers where it matters)
- */
-
-/**
- * Check if a provider/API key combination requires a CORS proxy.
+ * 决策规则：
+ * - zai：始终需要代理
+ * - anthropic：仅 OAuth 令牌（sk-ant-oat-*）需要代理，普通 API Key 不需要
+ * - openai/google/groq 等：不需要代理
+ * - 未知提供商：默认不需要代理
  *
- * @param provider - Provider name (e.g., "anthropic", "openai", "zai")
- * @param apiKey - API key for the provider
- * @returns true if proxy is required, false otherwise
+ * @param provider - 提供商名称（如 "anthropic"、"openai"、"zai"）
+ * @param apiKey - 该提供商的 API Key
+ * @returns 若需要代理返回 true，否则返回 false
  */
 export function shouldUseProxyForProvider(provider: string, apiKey: string): boolean {
 	switch (provider.toLowerCase()) {
@@ -46,12 +51,13 @@ export function shouldUseProxyForProvider(provider: string, apiKey: string): boo
 }
 
 /**
- * Apply CORS proxy to a model's baseUrl if needed.
+ * 根据需要为模型的 baseUrl 添加 CORS 代理前缀。
+ * 若不需要代理或未配置代理 URL，则返回原始模型对象。
  *
- * @param model - The model to potentially proxy
- * @param apiKey - API key for the provider
- * @param proxyUrl - CORS proxy URL (e.g., "https://proxy.mariozechner.at/proxy")
- * @returns Model with modified baseUrl if proxy is needed, otherwise original model
+ * @param model - 要处理的模型对象
+ * @param apiKey - 该提供商的 API Key
+ * @param proxyUrl - CORS 代理 URL（如 "https://proxy.mariozechner.at/proxy"）
+ * @returns 若需要代理则返回修改了 baseUrl 的模型副本，否则返回原始模型
  */
 export function applyProxyIfNeeded<T extends Api>(model: Model<T>, apiKey: string, proxyUrl?: string): Model<T> {
 	// If no proxy URL configured, return original model
@@ -77,14 +83,15 @@ export function applyProxyIfNeeded<T extends Api>(model: Model<T>, apiKey: strin
 }
 
 /**
- * Check if an error is likely a CORS error.
+ * 判断一个错误是否可能是 CORS 错误。
  *
- * CORS errors in browsers typically manifest as:
- * - TypeError with message "Failed to fetch"
- * - NetworkError
+ * 浏览器中 CORS 错误通常表现为：
+ * - TypeError + "Failed to fetch" 消息
+ * - NetworkError 类型
+ * - 消息中包含 "cors" 或 "cross-origin"
  *
- * @param error - The error to check
- * @returns true if error is likely a CORS error
+ * @param error - 要检测的错误对象
+ * @returns 若可能是 CORS 错误返回 true
  */
 export function isCorsError(error: unknown): boolean {
 	if (!(error instanceof Error)) {
@@ -113,11 +120,11 @@ export function isCorsError(error: unknown): boolean {
 }
 
 /**
- * Create a streamFn that applies CORS proxy when needed.
- * Reads proxy settings from storage on each call.
+ * 创建一个支持 CORS 代理的流式请求函数。
+ * 每次调用时从存储中读取代理设置，按需为模型添加代理。
  *
- * @param getProxyUrl - Async function to get current proxy URL (or undefined if disabled)
- * @returns A streamFn compatible with Agent's streamFn option
+ * @param getProxyUrl - 异步函数，返回当前代理 URL（禁用时返回 undefined）
+ * @returns 与 Agent 的 streamFn 选项兼容的流式请求函数
  */
 export function createStreamFn(getProxyUrl: () => Promise<string | undefined>) {
 	return async (model: Model<any>, context: Context, options?: SimpleStreamOptions) => {

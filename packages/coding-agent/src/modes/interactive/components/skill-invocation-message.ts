@@ -1,12 +1,19 @@
+/**
+ * 技能调用消息组件。
+ *
+ * 该文件提供技能（Skill）调用信息的显示组件，支持折叠/展开。
+ * 仅渲染技能块本身，用户消息由其他组件单独渲染。
+ */
+
 import { Box, Markdown, type MarkdownTheme, Text } from "@mariozechner/pi-tui";
 import type { ParsedSkillBlock } from "../../../core/agent-session.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { editorKey } from "./keybinding-hints.js";
 
 /**
- * Component that renders a skill invocation message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
- * Only renders the skill block itself - user message is rendered separately.
+ * 技能调用消息渲染组件。
+ * 使用与自定义消息相同的背景色以保持视觉一致性。
+ * 折叠时显示技能名称和展开提示，展开时以 Markdown 格式显示技能的完整内容。
  */
 export class SkillInvocationMessageComponent extends Box {
 	private expanded = false;

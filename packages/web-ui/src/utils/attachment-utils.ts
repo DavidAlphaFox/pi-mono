@@ -1,3 +1,11 @@
+/**
+ * @file attachment-utils.ts
+ * @description 附件加载和处理工具。
+ * 支持从 URL、File、Blob 或 ArrayBuffer 加载附件，
+ * 自动提取 PDF、DOCX、PPTX、XLSX 文件的纯文本内容，
+ * 为 PDF 和图片生成预览缩略图。
+ */
+
 import { parseAsync } from "docx-preview";
 import JSZip from "jszip";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -5,9 +13,10 @@ import * as pdfjsLib from "pdfjs-dist";
 import * as XLSX from "xlsx";
 import { i18n } from "./i18n.js";
 
-// Configure PDF.js worker - we'll need to bundle this
+// 配置 PDF.js Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
+/** 附件数据接口 */
 export interface Attachment {
 	id: string;
 	type: "image" | "document";
@@ -20,11 +29,13 @@ export interface Attachment {
 }
 
 /**
- * Load an attachment from various sources
- * @param source - URL string, File, Blob, or ArrayBuffer
- * @param fileName - Optional filename override
- * @returns Promise<Attachment>
- * @throws Error if loading fails
+ * 从多种数据源加载附件。
+ * 支持 URL 字符串、File 对象、Blob 和 ArrayBuffer。
+ * 自动检测 MIME 类型，为文档类型提取文本，为图片/PDF 生成预览。
+ * @param source - 数据源（URL、File、Blob 或 ArrayBuffer）
+ * @param fileName - 可选的文件名覆盖
+ * @returns 附件对象
+ * @throws 加载失败时抛出错误
  */
 export async function loadAttachment(
 	source: string | File | Blob | ArrayBuffer,

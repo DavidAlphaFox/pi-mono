@@ -1,6 +1,14 @@
 /**
- * Interface for providing runtime capabilities to sandboxed iframes.
- * Each provider injects data and runtime functions into the sandbox context.
+ * @file SandboxRuntimeProvider.ts
+ * @description 沙箱运行时提供者接口定义。
+ * 定义了向沙箱 iframe 注入数据、运行时函数和双向通信能力的标准接口。
+ * 每个提供者负责一种能力（如制品访问、附件访问、控制台捕获等）。
+ */
+
+/**
+ * 沙箱运行时提供者接口。
+ * 每个实现者向沙箱环境注入特定的数据和运行时函数，
+ * 并可选地处理沙箱发来的消息和管理执行生命周期。
  */
 export interface SandboxRuntimeProvider {
 	/**

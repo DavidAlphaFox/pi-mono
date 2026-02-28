@@ -1,5 +1,8 @@
 /**
- * TUI component for managing package resources (enable/disable)
+ * 资源配置管理组件。
+ *
+ * 该文件提供用于管理包资源（扩展、技能、提示词、主题）启用/禁用的 TUI 组件，
+ * 支持搜索、按组/子组层级浏览、切换启用状态等操作。
  */
 
 import { basename, dirname, join, relative } from "node:path";
@@ -542,6 +545,10 @@ class ResourceList implements Component, Focusable {
 	}
 }
 
+/**
+ * 资源配置选择器组件。
+ * 管理包资源的启用/禁用，支持搜索、分组浏览和状态切换。
+ */
 export class ConfigSelectorComponent extends Container implements Focusable {
 	private resourceList: ResourceList;
 

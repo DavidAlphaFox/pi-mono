@@ -1,3 +1,11 @@
+/**
+ * @file artifacts.ts
+ * @description 制品面板组件和制品工具定义。
+ * ArtifactsPanel 管理制品的创建、更新、删除和展示，
+ * 包含制品工具的 execute 逻辑（create/update/rewrite/get/delete/htmlArtifactLogs）。
+ * 支持多种文件类型的制品显示（HTML、SVG、Markdown、图片、PDF、DOCX 等）。
+ */
+
 import { icon } from "@mariozechner/mini-lit";
 import "@mariozechner/mini-lit/dist/MarkdownBlock.js";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";

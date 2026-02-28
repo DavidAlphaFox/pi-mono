@@ -1,23 +1,40 @@
+/**
+ * @file Box 容器组件
+ *
+ * 提供一个容器组件，为所有子组件统一应用内边距和背景色。
+ * 渲染结果会被缓存，通过对比子组件输出和背景色采样来判断是否需要重新渲染。
+ */
+
 import type { Component } from "../tui.js";
 import { applyBackgroundToLine, visibleWidth } from "../utils.js";
 
+/** 渲染缓存结构 */
 type RenderCache = {
+	/** 子组件渲染的行（含左内边距） */
 	childLines: string[];
+	/** 渲染时的宽度 */
 	width: number;
+	/** 背景色函数的采样输出（用于检测背景色变化） */
 	bgSample: string | undefined;
+	/** 最终渲染结果 */
 	lines: string[];
 };
 
 /**
- * Box component - a container that applies padding and background to all children
+ * Box 容器组件 - 为所有子组件应用统一的内边距和背景色。
+ * 子组件按添加顺序垂直排列渲染。
  */
 export class Box implements Component {
+	/** 子组件列表 */
 	children: Component[] = [];
+	/** 水平内边距 */
 	private paddingX: number;
+	/** 垂直内边距 */
 	private paddingY: number;
+	/** 背景色函数 */
 	private bgFn?: (text: string) => string;
 
-	// Cache for rendered output
+	// 渲染输出缓存
 	private cache?: RenderCache;
 
 	constructor(paddingX = 1, paddingY = 1, bgFn?: (text: string) => string) {
@@ -26,11 +43,13 @@ export class Box implements Component {
 		this.bgFn = bgFn;
 	}
 
+	/** 添加子组件 */
 	addChild(component: Component): void {
 		this.children.push(component);
 		this.invalidateCache();
 	}
 
+	/** 移除子组件 */
 	removeChild(component: Component): void {
 		const index = this.children.indexOf(component);
 		if (index !== -1) {
@@ -39,11 +58,13 @@ export class Box implements Component {
 		}
 	}
 
+	/** 清除所有子组件 */
 	clear(): void {
 		this.children = [];
 		this.invalidateCache();
 	}
 
+	/** 设置背景色函数（通过采样检测变化） */
 	setBgFn(bgFn?: (text: string) => string): void {
 		this.bgFn = bgFn;
 		// Don't invalidate here - we'll detect bgFn changes by sampling output
@@ -124,6 +145,7 @@ export class Box implements Component {
 		return result;
 	}
 
+	/** 为行应用背景色并填充至指定宽度 */
 	private applyBg(line: string, width: number): string {
 		const visLen = visibleWidth(line);
 		const padNeeded = Math.max(0, width - visLen);

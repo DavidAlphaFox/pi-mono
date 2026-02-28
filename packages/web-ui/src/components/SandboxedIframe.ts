@@ -1,3 +1,11 @@
+/**
+ * @file SandboxedIframe.ts
+ * @description 沙箱 iframe 组件（<sandboxed-iframe>）。
+ * 在隔离的 iframe 环境中执行 JavaScript 代码或渲染 HTML 制品。
+ * 支持 srcdoc 模式和沙箱 URL 模式（用于浏览器扩展），
+ * 通过运行时消息桥（postMessage）与沙箱内代码通信。
+ */
+
 import { LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { ConsoleRuntimeProvider } from "./sandbox/ConsoleRuntimeProvider.js";
@@ -5,12 +13,14 @@ import { RuntimeMessageBridge } from "./sandbox/RuntimeMessageBridge.js";
 import { type MessageConsumer, RUNTIME_MESSAGE_ROUTER } from "./sandbox/RuntimeMessageRouter.js";
 import type { SandboxRuntimeProvider } from "./sandbox/SandboxRuntimeProvider.js";
 
+/** 沙箱中生成的文件接口 */
 export interface SandboxFile {
 	fileName: string;
 	content: string | Uint8Array;
 	mimeType: string;
 }
 
+/** 沙箱执行结果接口 */
 export interface SandboxResult {
 	success: boolean;
 	console: Array<{ type: string; text: string }>;
@@ -20,24 +30,24 @@ export interface SandboxResult {
 }
 
 /**
- * Function that returns the URL to the sandbox HTML file.
- * Used in browser extensions to load sandbox.html via chrome.runtime.getURL().
+ * 返回沙箱 HTML 文件 URL 的函数类型。
+ * 在浏览器扩展中用于通过 chrome.runtime.getURL() 加载 sandbox.html。
  */
 export type SandboxUrlProvider = () => string;
 
 /**
- * Configuration for prepareHtmlDocument
+ * prepareHtmlDocument 的配置选项。
  */
 export interface PrepareHtmlOptions {
-	/** True if this is an HTML artifact (inject into existing HTML), false if REPL (wrap in HTML) */
+	/** 是否为 HTML 制品（注入现有 HTML），false 表示 REPL（包裹在 HTML 中） */
 	isHtmlArtifact: boolean;
-	/** True if this is a standalone download (no runtime bridge, no navigation interceptor) */
+	/** 是否为独立下载（不注入运行时桥和导航拦截器） */
 	isStandalone?: boolean;
 }
 
 /**
- * Escape HTML special sequences in code to prevent premature tag closure
- * @param code Code that will be injected into <script> tags
+ * 转义代码中的 HTML 特殊序列，防止注入 <script> 标签时提前闭合。
+ * @param code 将被注入 <script> 标签的代码
  * @returns Escaped code safe for injection
  */
 function escapeScriptContent(code: string): string {

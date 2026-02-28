@@ -1,3 +1,13 @@
+/**
+ * @file OpenAI Responses API 提供商
+ *
+ * 本文件实现了 OpenAI Responses API（GPT-5 等新一代模型）的流式调用，支持：
+ * - 推理摘要（Reasoning Summary）和加密推理内容
+ * - 提示缓存（session-based，支持 24 小时长期缓存）
+ * - 服务层级定价（flex 半价、priority 双倍）
+ * - GitHub Copilot 代理头
+ */
+
 import OpenAI from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 import { getEnvApiKey } from "../env-api-keys.js";
@@ -58,6 +68,7 @@ export interface OpenAIResponsesOptions extends StreamOptions {
 /**
  * Generate function for OpenAI Responses API
  */
+/** OpenAI Responses API 的底层流式调用函数 */
 export const streamOpenAIResponses: StreamFunction<"openai-responses", OpenAIResponsesOptions> = (
 	model: Model<"openai-responses">,
 	context: Context,
@@ -124,6 +135,7 @@ export const streamOpenAIResponses: StreamFunction<"openai-responses", OpenAIRes
 	return stream;
 };
 
+/** OpenAI Responses API 的简化版流式调用函数 */
 export const streamSimpleOpenAIResponses: StreamFunction<"openai-responses", SimpleStreamOptions> = (
 	model: Model<"openai-responses">,
 	context: Context,

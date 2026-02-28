@@ -1,12 +1,23 @@
+/**
+ * @file 截断文本组件
+ *
+ * 提供单行文本显示功能，超出宽度时自动截断并添加省略号。
+ * 适用于标题栏、状态栏等需要单行显示的场景。
+ */
+
 import type { Component } from "../tui.js";
 import { truncateToWidth, visibleWidth } from "../utils.js";
 
 /**
- * Text component that truncates to fit viewport width
+ * 截断文本组件 - 单行文本，超出视口宽度时截断。
+ * 仅取第一行（忽略换行符后的内容）。
  */
 export class TruncatedText implements Component {
+	/** 文本内容 */
 	private text: string;
+	/** 水平内边距 */
 	private paddingX: number;
+	/** 垂直内边距 */
 	private paddingY: number;
 
 	constructor(text: string, paddingX: number = 0, paddingY: number = 0) {
@@ -19,6 +30,7 @@ export class TruncatedText implements Component {
 		// No cached state to invalidate currently
 	}
 
+	/** 渲染截断文本，返回包含单行文本和垂直填充的行数组 */
 	render(width: number): string[] {
 		const result: string[] = [];
 

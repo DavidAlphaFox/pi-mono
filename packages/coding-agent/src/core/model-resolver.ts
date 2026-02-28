@@ -1,5 +1,12 @@
 /**
- * Model resolution, scoping, and initial selection
+ * 模型解析、作用域限定和初始选择模块
+ *
+ * 职责：
+ * - 将模型模式字符串（如 "sonnet:high"、"anthropic/*"）解析为具体的 Model 对象
+ * - 支持精确匹配、部分匹配、glob 模式匹配和模糊匹配
+ * - 处理模型 ID 中的冒号（区分思考级别后缀和模型 ID 的一部分）
+ * - 选择初始模型（按优先级：CLI 参数 > 作用域模型 > 会话恢复 > 保存的默认 > 第一个可用）
+ * - 提供各提供商的默认模型 ID 映射
  */
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -10,7 +17,7 @@ import { isValidThinkingLevel } from "../cli/args.js";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.js";
 import type { ModelRegistry } from "./model-registry.js";
 
-/** Default model IDs for each known provider */
+/** 各已知提供商的默认模型 ID */
 export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
 	anthropic: "claude-opus-4-6",
@@ -36,6 +43,7 @@ export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	"kimi-coding": "kimi-k2-thinking",
 };
 
+/** 作用域模型 - 可能带有显式思考级别 */
 export interface ScopedModel {
 	model: Model<Api>;
 	/** Thinking level if explicitly specified in pattern (e.g., "model:high"), undefined otherwise */
@@ -43,8 +51,8 @@ export interface ScopedModel {
 }
 
 /**
- * Helper to check if a model ID looks like an alias (no date suffix)
- * Dates are typically in format: -20241022 or -20250929
+ * 判断模型 ID 是否为别名（没有日期后缀）
+ * 日期格式通常为：-20241022 或 -20250929
  */
 function isAlias(id: string): boolean {
 	// Check if ID ends with -latest
@@ -56,8 +64,8 @@ function isAlias(id: string): boolean {
 }
 
 /**
- * Try to match a pattern to a model from the available models list.
- * Returns the matched model or undefined if no match found.
+ * 尝试将模式字符串匹配到可用模型列表中的模型
+ * 匹配优先级：提供商/模型ID 精确匹配 > ID 精确匹配 > 部分匹配（优先别名，其次最新日期版本）
  */
 function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Model<Api> | undefined {
 	// Check for provider/modelId format (provider is everything before the first /)
@@ -106,25 +114,26 @@ function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Mod
 	}
 }
 
+/** 模型模式解析结果 */
 export interface ParsedModelResult {
 	model: Model<Api> | undefined;
-	/** Thinking level if explicitly specified in pattern, undefined otherwise */
+	/** 模式中显式指定的思考级别，未指定时为 undefined */
 	thinkingLevel?: ThinkingLevel;
 	warning: string | undefined;
 }
 
 /**
- * Parse a pattern to extract model and thinking level.
- * Handles models with colons in their IDs (e.g., OpenRouter's :exacto suffix).
+ * 解析模式字符串，提取模型和思考级别
+ * 处理 ID 中包含冒号的模型（如 OpenRouter 的 :exacto 后缀）
  *
- * Algorithm:
- * 1. Try to match full pattern as a model
- * 2. If found, return it with "off" thinking level
- * 3. If not found and has colons, split on last colon:
- *    - If suffix is valid thinking level, use it and recurse on prefix
- *    - If suffix is invalid, warn and recurse on prefix with "off"
+ * 算法：
+ * 1. 先尝试将完整模式作为模型匹配
+ * 2. 若匹配成功，返回该模型（思考级别为 undefined）
+ * 3. 若未匹配且包含冒号，按最后一个冒号拆分：
+ *    - 后缀是有效思考级别：使用该级别，递归匹配前缀
+ *    - 后缀无效：发出警告，递归匹配前缀（思考级别为 undefined）
  *
- * @internal Exported for testing
+ * @internal 为测试导出
  */
 export function parseModelPattern(
 	pattern: string,
@@ -182,15 +191,13 @@ export function parseModelPattern(
 }
 
 /**
- * Resolve model patterns to actual Model objects with optional thinking levels
- * Format: "pattern:level" where :level is optional
- * For each pattern, finds all matching models and picks the best version:
- * 1. Prefer alias (e.g., claude-sonnet-4-5) over dated versions (claude-sonnet-4-5-20250929)
- * 2. If no alias, pick the latest dated version
+ * 将模型模式列表解析为实际的 Model 对象（可选附带思考级别）
+ * 格式："pattern:level"，其中 :level 可选
+ * 对每个模式，查找所有匹配模型并选择最佳版本：
+ * 1. 优先别名（如 claude-sonnet-4-5）而非带日期版本（claude-sonnet-4-5-20250929）
+ * 2. 无别名时选最新日期版本
  *
- * Supports models with colons in their IDs (e.g., OpenRouter's model:exacto).
- * The algorithm tries to match the full pattern first, then progressively
- * strips colon-suffixes to find a match.
+ * 支持 glob 模式（*、?、[）和 ID 中包含冒号的模型
  */
 export async function resolveModelScope(patterns: string[], modelRegistry: ModelRegistry): Promise<ScopedModel[]> {
 	const availableModels = await modelRegistry.getAvailable();
@@ -252,27 +259,24 @@ export async function resolveModelScope(patterns: string[], modelRegistry: Model
 	return scopedModels;
 }
 
+/** CLI 模型解析结果 */
 export interface ResolveCliModelResult {
 	model: Model<Api> | undefined;
 	thinkingLevel?: ThinkingLevel;
 	warning: string | undefined;
-	/**
-	 * Error message suitable for CLI display.
-	 * When set, model will be undefined.
-	 */
+	/** 适合 CLI 显示的错误消息，设置时 model 为 undefined */
 	error: string | undefined;
 }
 
 /**
- * Resolve a single model from CLI flags.
+ * 从 CLI 标志解析单个模型
  *
- * Supports:
+ * 支持的格式：
  * - --provider <provider> --model <pattern>
  * - --model <provider>/<pattern>
- * - Fuzzy matching (same rules as model scoping: exact id, then partial id/name)
+ * - 模糊匹配（同模型作用域规则：精确 ID > 部分 ID/名称匹配）
  *
- * Note: This does not apply the thinking level by itself, but it may *parse* and
- * return a thinking level from "<pattern>:<thinking>" so the caller can apply it.
+ * 注意：不直接应用思考级别，但会从 "<pattern>:<thinking>" 解析并返回思考级别供调用者使用
  */
 export function resolveCliModel(options: {
 	cliProvider?: string;
@@ -396,19 +400,21 @@ export function resolveCliModel(options: {
 	};
 }
 
+/** 初始模型查找结果 */
 export interface InitialModelResult {
 	model: Model<Api> | undefined;
 	thinkingLevel: ThinkingLevel;
+	/** 降级消息，当无法使用首选模型时提供提示 */
 	fallbackMessage: string | undefined;
 }
 
 /**
- * Find the initial model to use based on priority:
- * 1. CLI args (provider + model)
- * 2. First model from scoped models (if not continuing/resuming)
- * 3. Restored from session (if continuing/resuming)
- * 4. Saved default from settings
- * 5. First available model with valid API key
+ * 按优先级查找初始模型：
+ * 1. CLI 参数（provider + model）
+ * 2. 作用域模型列表的第一个（非继续/恢复时）
+ * 3. 从会话恢复（继续/恢复时）
+ * 4. 设置中保存的默认模型
+ * 5. 第一个有有效 API key 的可用模型
  */
 export async function findInitialModel(options: {
 	cliProvider?: string;
@@ -487,7 +493,7 @@ export async function findInitialModel(options: {
 }
 
 /**
- * Restore model from session, with fallback to available models
+ * 从会话恢复模型，不可用时降级到其他可用模型
  */
 export async function restoreModelFromSession(
 	savedProvider: string,

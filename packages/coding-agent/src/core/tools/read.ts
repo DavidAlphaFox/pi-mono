@@ -1,3 +1,13 @@
+/**
+ * 文件读取工具
+ *
+ * 本文件实现了读取文件内容的工具，功能包括：
+ * 1. 读取文本文件，支持按偏移量和行数限制分段读取
+ * 2. 读取图片文件（jpg/png/gif/webp），自动调整尺寸后以 base64 返回
+ * 3. 输出截断：从头部开始保留 N 行/N 字节，超出部分提示用户使用 offset 继续读取
+ * 4. 可插拔的读取操作（ReadOperations），支持远程文件系统（如 SSH）
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
 import { type Static, Type } from "@sinclair/typebox";
@@ -14,22 +24,25 @@ const readSchema = Type.Object({
 	limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
 });
 
+/** 读取工具的输入参数类型 */
 export type ReadToolInput = Static<typeof readSchema>;
 
+/** 读取工具的详细信息，包含截断结果 */
 export interface ReadToolDetails {
+	/** 输出截断结果（如果发生了截断） */
 	truncation?: TruncationResult;
 }
 
 /**
- * Pluggable operations for the read tool.
- * Override these to delegate file reading to remote systems (e.g., SSH).
+ * 读取工具的可插拔操作接口。
+ * 可通过覆写此接口将文件读取委托给远程系统（如 SSH）。
  */
 export interface ReadOperations {
-	/** Read file contents as a Buffer */
+	/** 读取文件内容，返回 Buffer */
 	readFile: (absolutePath: string) => Promise<Buffer>;
-	/** Check if file is readable (throw if not) */
+	/** 检查文件是否可读（不可读时抛出异常） */
 	access: (absolutePath: string) => Promise<void>;
-	/** Detect image MIME type, return null/undefined for non-images */
+	/** 检测图片 MIME 类型，非图片返回 null/undefined */
 	detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
 }
 
@@ -39,13 +52,18 @@ const defaultReadOperations: ReadOperations = {
 	detectImageMimeType: detectSupportedImageMimeTypeFromFile,
 };
 
+/** 读取工具的配置选项 */
 export interface ReadToolOptions {
-	/** Whether to auto-resize images to 2000x2000 max. Default: true */
+	/** 是否自动将图片缩放至最大 2000x2000，默认为 true */
 	autoResizeImages?: boolean;
-	/** Custom operations for file reading. Default: local filesystem */
+	/** 自定义文件读取操作，默认使用本地文件系统 */
 	operations?: ReadOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的文件读取工具实例。
+ * 支持文本文件分段读取和图片文件的自动缩放。
+ */
 export function createReadTool(cwd: string, options?: ReadToolOptions): AgentTool<typeof readSchema> {
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	const ops = options?.operations ?? defaultReadOperations;
@@ -218,5 +236,5 @@ export function createReadTool(cwd: string, options?: ReadToolOptions): AgentToo
 	};
 }
 
-/** Default read tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认读取工具实例，保持向后兼容 */
 export const readTool = createReadTool(process.cwd());

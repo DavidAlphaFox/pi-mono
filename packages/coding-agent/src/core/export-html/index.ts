@@ -1,3 +1,15 @@
+/**
+ * HTML 导出模块
+ *
+ * 本文件实现了将会话导出为独立 HTML 文件的功能，包括：
+ * 1. 从会话管理器读取会话数据并序列化为 Base64 JSON
+ * 2. 主题变量注入：从当前主题生成 CSS 自定义属性
+ * 3. 背景颜色推导：根据主题的 userMessageBg 自动计算页面/卡片/信息区背景色
+ * 4. 自定义工具的预渲染：调用工具的 TUI 渲染器并转换为 HTML
+ * 5. 模板组装：将 CSS、JS（含 marked.js 和 highlight.js）嵌入到 HTML 模板中
+ * 6. 支持两种导出入口：从活动会话导出和从文件导出
+ */
+
 import type { AgentState } from "@mariozechner/pi-agent-core";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, join } from "path";
@@ -8,13 +20,13 @@ import type { SessionEntry } from "../session-manager.js";
 import { SessionManager } from "../session-manager.js";
 
 /**
- * Interface for rendering custom tools to HTML.
- * Used by agent-session to pre-render extension tool output.
+ * 自定义工具的 HTML 渲染接口。
+ * 由 agent-session 用于预渲染扩展工具的输出。
  */
 export interface ToolHtmlRenderer {
-	/** Render a tool call to HTML. Returns undefined if tool has no custom renderer. */
+	/** 将工具调用渲染为 HTML，无自定义渲染器时返回 undefined */
 	renderCall(toolName: string, args: unknown): string | undefined;
-	/** Render a tool result to HTML. Returns undefined if tool has no custom renderer. */
+	/** 将工具结果渲染为 HTML，无自定义渲染器时返回 undefined */
 	renderResult(
 		toolName: string,
 		result: Array<{ type: string; text?: string; data?: string; mimeType?: string }>,
@@ -23,20 +35,23 @@ export interface ToolHtmlRenderer {
 	): string | undefined;
 }
 
-/** Pre-rendered HTML for a custom tool call and result */
+/** 自定义工具的预渲染 HTML（调用和结果） */
 interface RenderedToolHtml {
 	callHtml?: string;
 	resultHtml?: string;
 }
 
+/** 导出选项 */
 export interface ExportOptions {
+	/** 输出文件路径 */
 	outputPath?: string;
+	/** 主题名称 */
 	themeName?: string;
-	/** Optional tool renderer for custom tools */
+	/** 可选的自定义工具渲染器 */
 	toolRenderer?: ToolHtmlRenderer;
 }
 
-/** Parse a color string to RGB values. Supports hex (#RRGGBB) and rgb(r,g,b) formats. */
+/** 将颜色字符串解析为 RGB 值，支持 hex（#RRGGBB）和 rgb(r,g,b) 格式 */
 function parseColor(color: string): { r: number; g: number; b: number } | undefined {
 	const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
 	if (hexMatch) {
@@ -57,7 +72,7 @@ function parseColor(color: string): { r: number; g: number; b: number } | undefi
 	return undefined;
 }
 
-/** Calculate relative luminance of a color (0-1, higher = lighter). */
+/** 计算颜色的相对亮度（0-1，越大越亮） */
 function getLuminance(r: number, g: number, b: number): number {
 	const toLinear = (c: number) => {
 		const s = c / 255;
@@ -66,7 +81,7 @@ function getLuminance(r: number, g: number, b: number): number {
 	return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
 
-/** Adjust color brightness. Factor > 1 lightens, < 1 darkens. */
+/** 调整颜色亮度。factor > 1 变亮，< 1 变暗 */
 function adjustBrightness(color: string, factor: number): string {
 	const parsed = parseColor(color);
 	if (!parsed) return color;
@@ -74,7 +89,7 @@ function adjustBrightness(color: string, factor: number): string {
 	return `rgb(${adjust(parsed.r)}, ${adjust(parsed.g)}, ${adjust(parsed.b)})`;
 }
 
-/** Derive export background colors from a base color (e.g., userMessageBg). */
+/** 从基础颜色（如 userMessageBg）推导导出页面的背景颜色 */
 function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string; infoBg: string } {
 	const parsed = parseColor(baseColor);
 	if (!parsed) {
@@ -103,7 +118,7 @@ function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string
 }
 
 /**
- * Generate CSS custom property declarations from theme colors.
+ * 从主题颜色生成 CSS 自定义属性声明。
  */
 function generateThemeVars(themeName?: string): string {
 	const colors = getResolvedThemeColors(themeName);
@@ -135,7 +150,7 @@ interface SessionData {
 }
 
 /**
- * Core HTML generation logic shared by both export functions.
+ * 两种导出函数共享的核心 HTML 生成逻辑。
  */
 function generateHtml(sessionData: SessionData, themeName?: string): string {
 	const templateDir = getExportTemplateDir();
@@ -170,11 +185,11 @@ function generateHtml(sessionData: SessionData, themeName?: string): string {
 		.replace("{{HIGHLIGHT_JS}}", hljsJs);
 }
 
-/** Built-in tool names that have custom rendering in template.js */
+/** 在 template.js 中有自定义渲染逻辑的内置工具名称 */
 const BUILTIN_TOOLS = new Set(["bash", "read", "write", "edit", "ls", "find", "grep"]);
 
 /**
- * Pre-render custom tools to HTML using their TUI renderers.
+ * 使用工具的 TUI 渲染器预渲染自定义工具为 HTML。
  */
 function preRenderCustomTools(
 	entries: SessionEntry[],
@@ -219,8 +234,8 @@ function preRenderCustomTools(
 }
 
 /**
- * Export session to HTML using SessionManager and AgentState.
- * Used by TUI's /export command.
+ * 使用 SessionManager 和 AgentState 将会话导出为 HTML。
+ * 由 TUI 的 /export 命令使用。
  */
 export async function exportSessionToHtml(
 	sm: SessionManager,
@@ -271,8 +286,8 @@ export async function exportSessionToHtml(
 }
 
 /**
- * Export session file to HTML (standalone, without AgentState).
- * Used by CLI for exporting arbitrary session files.
+ * 从会话文件导出为 HTML（独立模式，不需要 AgentState）。
+ * 由 CLI 用于导出任意会话文件。
  */
 export async function exportFromFile(inputPath: string, options?: ExportOptions | string): Promise<string> {
 	const opts: ExportOptions = typeof options === "string" ? { outputPath: options } : options || {};

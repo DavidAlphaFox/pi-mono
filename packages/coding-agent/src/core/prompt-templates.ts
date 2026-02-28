@@ -1,12 +1,21 @@
+/**
+ * 提示词模板加载和参数替换模块
+ *
+ * 职责：
+ * - 从全局目录、项目目录和显式路径加载 .md 提示词模板
+ * - 解析 frontmatter 提取名称和描述
+ * - 支持 bash 风格的参数替换（$1、$@、$ARGUMENTS、${@:N}、${@:N:L}）
+ * - 解析引号包裹的命令参数
+ * - 在用户输入中展开匹配的模板
+ */
+
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { basename, isAbsolute, join, resolve, sep } from "path";
 import { CONFIG_DIR_NAME, getPromptsDir } from "../config.js";
 import { parseFrontmatter } from "../utils/frontmatter.js";
 
-/**
- * Represents a prompt template loaded from a markdown file
- */
+/** 从 markdown 文件加载的提示词模板 */
 export interface PromptTemplate {
 	name: string;
 	description: string;
@@ -16,8 +25,8 @@ export interface PromptTemplate {
 }
 
 /**
- * Parse command arguments respecting quoted strings (bash-style)
- * Returns array of arguments
+ * 解析命令参数，尊重引号字符串（bash 风格）
+ * 返回参数数组
  */
 export function parseCommandArgs(argsString: string): string[] {
 	const args: string[] = [];
@@ -53,15 +62,14 @@ export function parseCommandArgs(argsString: string): string[] {
 }
 
 /**
- * Substitute argument placeholders in template content
- * Supports:
- * - $1, $2, ... for positional args
- * - $@ and $ARGUMENTS for all args
- * - ${@:N} for args from Nth onwards (bash-style slicing)
- * - ${@:N:L} for L args starting from Nth
+ * 替换模板内容中的参数占位符
+ * 支持：
+ * - $1, $2, ... 位置参数
+ * - $@ 和 $ARGUMENTS 所有参数
+ * - ${@:N} 从第 N 个开始的参数（bash 风格切片）
+ * - ${@:N:L} 从第 N 个开始的 L 个参数
  *
- * Note: Replacement happens on the template string only. Argument values
- * containing patterns like $1, $@, or $ARGUMENTS are NOT recursively substituted.
+ * 注意：替换仅在模板字符串上进行，参数值中的模式不会被递归替换
  */
 export function substituteArgs(content: string, args: string[]): string {
 	let result = content;
@@ -174,6 +182,7 @@ function loadTemplatesFromDir(dir: string, source: string, sourceLabel: string):
 	return templates;
 }
 
+/** 提示词模板加载选项 */
 export interface LoadPromptTemplatesOptions {
 	/** Working directory for project-local templates. Default: process.cwd() */
 	cwd?: string;
@@ -204,10 +213,10 @@ function buildPathSourceLabel(p: string): string {
 }
 
 /**
- * Load all prompt templates from:
- * 1. Global: agentDir/prompts/
- * 2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
- * 3. Explicit prompt paths
+ * 从所有位置加载提示词模板：
+ * 1. 全局：agentDir/prompts/
+ * 2. 项目：cwd/{CONFIG_DIR_NAME}/prompts/
+ * 3. 显式路径
  */
 export function loadPromptTemplates(options: LoadPromptTemplatesOptions = {}): PromptTemplate[] {
 	const resolvedCwd = options.cwd ?? process.cwd();
@@ -279,8 +288,7 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions = {}): P
 }
 
 /**
- * Expand a prompt template if it matches a template name.
- * Returns the expanded content or the original text if not a template.
+ * 展开提示词模板 - 匹配模板名称时返回展开内容，否则返回原文
  */
 export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {
 	if (!text.startsWith("/")) return text;

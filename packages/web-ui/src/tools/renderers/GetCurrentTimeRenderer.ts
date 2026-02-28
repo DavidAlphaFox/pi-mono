@@ -1,3 +1,9 @@
+/**
+ * @file GetCurrentTimeRenderer.ts
+ * @description 获取当前时间工具渲染器。
+ * 展示时间查询请求和返回的时间结果。
+ */
+
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
 import { html } from "lit";
 import { Clock } from "lucide";
@@ -5,11 +11,12 @@ import { i18n } from "../../utils/i18n.js";
 import { renderHeader } from "../renderer-registry.js";
 import type { ToolRenderer, ToolRenderResult } from "../types.js";
 
+/** 获取当前时间工具参数 */
 interface GetCurrentTimeParams {
 	timezone?: string;
 }
 
-// GetCurrentTime tool has undefined details (only uses output)
+/** 当前时间渲染器，展示时区信息和时间结果 */
 export class GetCurrentTimeRenderer implements ToolRenderer<GetCurrentTimeParams, undefined> {
 	render(
 		params: GetCurrentTimeParams | undefined,

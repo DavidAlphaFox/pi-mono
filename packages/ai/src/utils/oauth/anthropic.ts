@@ -1,11 +1,16 @@
 /**
- * Anthropic OAuth flow (Claude Pro/Max)
+ * @file Anthropic OAuth 认证流程
+ *
+ * 实现 Anthropic（Claude Pro/Max）的 OAuth 授权码流程（PKCE）。
+ * 用户在浏览器中完成授权后，粘贴授权码完成令牌交换。
  */
 
 import { generatePKCE } from "./pkce.js";
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from "./types.js";
 
+/** Base64 解码辅助函数 */
 const decode = (s: string) => atob(s);
+/** OAuth 客户端 ID（Base64 编码存储） */
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
@@ -117,6 +122,7 @@ export async function refreshAnthropicToken(refreshToken: string): Promise<OAuth
 	};
 }
 
+/** Anthropic OAuth 提供商实现（适配 OAuthProviderInterface 接口） */
 export const anthropicOAuthProvider: OAuthProviderInterface = {
 	id: "anthropic",
 	name: "Anthropic (Claude Pro/Max)",

@@ -1,11 +1,21 @@
 /**
- * Extension system types.
+ * 扩展系统类型定义
  *
- * Extensions are TypeScript modules that can:
- * - Subscribe to agent lifecycle events
- * - Register LLM-callable tools
- * - Register commands, keyboard shortcuts, and CLI flags
- * - Interact with the user via UI primitives
+ * 本文件定义了扩展系统的所有类型，扩展是 TypeScript 模块，可以：
+ * - 订阅智能体生命周期事件（会话启动/关闭、工具调用/结果、消息开始/结束等）
+ * - 注册 LLM 可调用的工具（ToolDefinition）
+ * - 注册命令（RegisteredCommand）、键盘快捷键（ExtensionShortcut）和 CLI 标志（ExtensionFlag）
+ * - 通过 UI 原语与用户交互（ExtensionUIContext）
+ * - 注册自定义消息渲染器（MessageRenderer）
+ * - 注册自定义 AI 模型提供商（ProviderConfig）
+ *
+ * 主要类型分类：
+ * - UI 上下文：ExtensionUIContext、ExtensionUIDialogOptions、WidgetPlacement
+ * - 扩展 API：ExtensionAPI、ExtensionContext、ExtensionActions
+ * - 事件类型：SessionEvent、ToolCallEvent、ToolResultEvent、InputEvent 等
+ * - 工具定义：ToolDefinition、RegisteredTool、ToolInfo
+ * - 命令和快捷键：RegisteredCommand、ExtensionShortcut、ExtensionFlag
+ * - 渲染：MessageRenderer、ToolRenderResultOptions
  */
 
 import type {

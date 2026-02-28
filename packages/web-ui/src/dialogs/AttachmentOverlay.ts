@@ -1,3 +1,10 @@
+/**
+ * @file AttachmentOverlay.ts
+ * @description 附件全屏预览覆盖层组件。
+ * 支持预览多种文件类型（PDF、DOCX、Excel、图片、文本），
+ * 提供下载和查看提取文本的功能。
+ */
+
 import "@mariozechner/mini-lit/dist/ModeToggle.js";
 import { icon } from "@mariozechner/mini-lit";
 import { Button } from "@mariozechner/mini-lit/dist/Button.js";
@@ -10,8 +17,13 @@ import * as XLSX from "xlsx";
 import type { Attachment } from "../utils/attachment-utils.js";
 import { i18n } from "../utils/i18n.js";
 
+/** 支持的文件类型 */
 type FileType = "image" | "pdf" | "docx" | "pptx" | "excel" | "text";
 
+/**
+ * 附件全屏预览 Web Component。
+ * 覆盖整个视口展示附件内容，支持 ESC 关闭和下载操作。
+ */
 export class AttachmentOverlay extends LitElement {
 	@state() private attachment?: Attachment;
 	@state() private showExtractedText = false;

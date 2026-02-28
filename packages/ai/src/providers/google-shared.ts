@@ -1,5 +1,12 @@
 /**
- * Shared utilities for Google Generative AI and Google Cloud Code Assist providers.
+ * @file Google 提供商共享工具集
+ *
+ * 本文件提供 Google Generative AI、Vertex AI 和 Cloud Code Assist 三个提供商的共用功能：
+ * - 思考部分（Thinking Part）识别与思考签名（Thought Signature）保留
+ * - 内部消息格式到 Gemini Content[] 格式的转换（含思考块、工具调用、图像处理）
+ * - 工具声明格式转换（支持 parametersJsonSchema 和 legacy parameters 两种模式）
+ * - 停止原因（FinishReason）映射到统一 StopReason
+ * - Gemini 3 模型的无签名工具调用降级为文本上下文
  */
 
 import { type Content, FinishReason, FunctionCallingConfigMode, type Part } from "@google/genai";

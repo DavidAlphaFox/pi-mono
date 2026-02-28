@@ -1,9 +1,12 @@
 /**
- * Bash command execution with streaming support and cancellation.
+ * Bash 命令执行模块 - 支持流式输出和取消
  *
- * This module provides a unified bash execution implementation used by:
- * - AgentSession.executeBash() for interactive and RPC modes
- * - Direct calls from modes that need bash execution
+ * 职责：
+ * - 统一的 bash 执行实现，供 AgentSession.executeBash() 和各运行模式使用
+ * - 流式输出已净化的文本（去除 ANSI 转义、二进制垃圾、规范化换行）
+ * - 大输出自动写入临时文件
+ * - 通过 AbortSignal 支持取消
+ * - 超出阈值时自动截断输出
  */
 
 import { randomBytes } from "node:crypto";
@@ -20,23 +23,25 @@ import { DEFAULT_MAX_BYTES, truncateTail } from "./tools/truncate.js";
 // Types
 // ============================================================================
 
+/** Bash 执行器选项 */
 export interface BashExecutorOptions {
-	/** Callback for streaming output chunks (already sanitized) */
+	/** 流式输出块的回调（已净化） */
 	onChunk?: (chunk: string) => void;
-	/** AbortSignal for cancellation */
+	/** 用于取消的 AbortSignal */
 	signal?: AbortSignal;
 }
 
+/** Bash 执行结果 */
 export interface BashResult {
-	/** Combined stdout + stderr output (sanitized, possibly truncated) */
+	/** 合并的 stdout + stderr 输出（已净化，可能被截断） */
 	output: string;
-	/** Process exit code (undefined if killed/cancelled) */
+	/** 进程退出码（被终止/取消时为 undefined） */
 	exitCode: number | undefined;
-	/** Whether the command was cancelled via signal */
+	/** 是否通过信号取消 */
 	cancelled: boolean;
-	/** Whether the output was truncated */
+	/** 输出是否被截断 */
 	truncated: boolean;
-	/** Path to temp file containing full output (if output exceeded truncation threshold) */
+	/** 包含完整输出的临时文件路径（输出超过截断阈值时） */
 	fullOutputPath?: string;
 }
 
@@ -45,18 +50,14 @@ export interface BashResult {
 // ============================================================================
 
 /**
- * Execute a bash command with optional streaming and cancellation support.
+ * 执行 bash 命令，支持可选的流式输出和取消
  *
- * Features:
- * - Streams sanitized output via onChunk callback
- * - Writes large output to temp file for later retrieval
- * - Supports cancellation via AbortSignal
- * - Sanitizes output (strips ANSI, removes binary garbage, normalizes newlines)
- * - Truncates output if it exceeds the default max bytes
- *
- * @param command - The bash command to execute
- * @param options - Optional streaming callback and abort signal
- * @returns Promise resolving to execution result
+ * 功能：
+ * - 通过 onChunk 回调流式输出已净化文本
+ * - 大输出写入临时文件
+ * - 通过 AbortSignal 支持取消
+ * - 净化输出（去除 ANSI、移除二进制垃圾、规范化换行）
+ * - 超出默认最大字节数时截断输出
  */
 export function executeBash(command: string, options?: BashExecutorOptions): Promise<BashResult> {
 	return new Promise((resolve, reject) => {
@@ -181,8 +182,8 @@ export function executeBash(command: string, options?: BashExecutorOptions): Pro
 }
 
 /**
- * Execute a bash command using custom BashOperations.
- * Used for remote execution (SSH, containers, etc.).
+ * 使用自定义 BashOperations 执行 bash 命令
+ * 用于远程执行（SSH、容器等）
  */
 export async function executeBashWithOperations(
 	command: string,

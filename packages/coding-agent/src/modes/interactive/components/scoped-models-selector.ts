@@ -1,3 +1,10 @@
+/**
+ * 作用域模型选择器组件。
+ *
+ * 该文件提供用于配置哪些模型在模型循环中可用的选择器，
+ * 支持启用/禁用模型、按提供商批量切换、拖拽排序和持久化到设置。
+ */
+
 import type { Model } from "@mariozechner/pi-ai";
 import {
 	Container,
@@ -13,7 +20,7 @@ import {
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
-// EnabledIds: null = all enabled (no filter), string[] = explicit ordered list
+// 启用的模型 ID 列表：null 表示全部启用（无过滤），string[] 表示显式的有序列表
 type EnabledIds = string[] | null;
 
 function isEnabled(enabledIds: EnabledIds, id: string): boolean {
@@ -68,6 +75,7 @@ interface ModelItem {
 	enabled: boolean;
 }
 
+/** 模型配置数据接口 */
 export interface ModelsConfig {
 	allModels: Model<any>[];
 	enabledModelIds: Set<string>;
@@ -75,6 +83,7 @@ export interface ModelsConfig {
 	hasEnabledModelsFilter: boolean;
 }
 
+/** 模型操作回调接口 */
 export interface ModelsCallbacks {
 	/** Called when a model is toggled (session-only, no persist) */
 	onModelToggle: (modelId: string, enabled: boolean) => void;
@@ -90,8 +99,9 @@ export interface ModelsCallbacks {
 }
 
 /**
- * Component for enabling/disabling models for Ctrl+P cycling.
- * Changes are session-only until explicitly persisted with Ctrl+S.
+ * 作用域模型选择器组件。
+ * 用于启用/禁用模型循环中的模型。
+ * 更改仅在会话内生效，直到通过 Ctrl+S 显式持久化。
  */
 export class ScopedModelsSelectorComponent extends Container implements Focusable {
 	private modelsById: Map<string, Model<any>> = new Map();

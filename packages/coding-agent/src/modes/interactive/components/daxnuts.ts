@@ -1,7 +1,9 @@
 /**
- * POWERED BY DAXNUTS - Easter egg for OpenCode + Kimi K2.5
+ * DAXNUTS 彩蛋动画组件。
  *
- * A heartfelt tribute to dax (@thdxr) for providing free Kimi K2.5 access via OpenCode.
+ * 该文件是为 OpenCode + Kimi K2.5 制作的彩蛋，
+ * 向 dax (@thdxr) 致敬，感谢他通过 OpenCode 提供免费的 Kimi K2.5 访问。
+ * 以 RGB 像素艺术配合扫描线揭示动画展示。
  */
 
 import type { Component, TUI } from "@mariozechner/pi-tui";

@@ -1,3 +1,11 @@
+/**
+ * @file ChatPanel.ts
+ * @description 顶层聊天面板组件。
+ * 将 AgentInterface（聊天界面）和 ArtifactsPanel（制品面板）组合在一起，
+ * 支持响应式布局：宽屏时并排显示，窄屏时以覆盖层模式显示制品面板。
+ * 负责初始化 Agent、注册工具渲染器、配置运行时提供者等。
+ */
+
 import { Badge } from "@mariozechner/mini-lit/dist/Badge.js";
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -12,8 +20,13 @@ import { registerToolRenderer } from "./tools/renderer-registry.js";
 import type { Attachment } from "./utils/attachment-utils.js";
 import { i18n } from "./utils/i18n.js";
 
-const BREAKPOINT = 800; // px - switch between overlay and side-by-side
+/** 响应式断点（像素），低于此宽度切换为覆盖层模式 */
+const BREAKPOINT = 800;
 
+/**
+ * 顶层聊天面板 Web Component（<pi-chat-panel>）。
+ * 集成聊天界面和制品面板，管理响应式布局和制品数量徽章。
+ */
 @customElement("pi-chat-panel")
 export class ChatPanel extends LitElement {
 	@state() public agent?: Agent;
@@ -53,6 +66,13 @@ export class ChatPanel extends LitElement {
 		window.removeEventListener("resize", this.resizeHandler);
 	}
 
+	/**
+	 * 设置 Agent 并初始化聊天界面和制品面板。
+	 * 创建 AgentInterface、ArtifactsPanel，注册工具渲染器，
+	 * 配置运行时提供者工厂，从已有消息重建制品状态。
+	 * @param agent - AI 代理实例
+	 * @param config - 可选配置项（API Key 回调、发送前回调、沙箱 URL 提供者、工具工厂等）
+	 */
 	async setAgent(
 		agent: Agent,
 		config?: {
@@ -90,7 +110,7 @@ export class ChatPanel extends LitElement {
 		// Register the standalone tool renderer (not the panel itself)
 		registerToolRenderer("artifacts", new ArtifactsToolRenderer(this.artifactsPanel));
 
-		// Runtime providers factory for REPL tools (read-write access)
+		// 为 REPL 工具创建运行时提供者工厂（具有读写权限）
 		const runtimeProvidersFactory = () => {
 			const attachments: Attachment[] = [];
 			for (const message of this.agent!.state.messages) {
@@ -141,8 +161,8 @@ export class ChatPanel extends LitElement {
 		const tools = [this.artifactsPanel.tool, ...additionalTools];
 		this.agent.setTools(tools);
 
-		// Reconstruct artifacts from existing messages
-		// Temporarily disable the onArtifactsChange callback to prevent auto-opening on load
+		// 从已有消息重建制品状态
+		// 临时禁用 onArtifactsChange 回调，防止加载时自动打开面板
 		const originalCallback = this.artifactsPanel.onArtifactsChange;
 		this.artifactsPanel.onArtifactsChange = undefined;
 		await this.artifactsPanel.reconstructFromMessages(this.agent.state.messages);

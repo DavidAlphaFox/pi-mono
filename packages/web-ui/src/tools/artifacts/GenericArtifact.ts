@@ -1,9 +1,16 @@
+/**
+ * @file GenericArtifact.ts
+ * @description 通用制品展示组件（<generic-artifact>）。
+ * 用于不支持预览的文件类型，仅提供下载功能。
+ */
+
 import { DownloadButton } from "@mariozechner/mini-lit/dist/DownloadButton.js";
 import { html, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { i18n } from "../../utils/i18n.js";
 import { ArtifactElement } from "./ArtifactElement.js";
 
+/** 通用制品 Web Component，为不支持预览的文件类型提供下载功能 */
 @customElement("generic-artifact")
 export class GenericArtifact extends ArtifactElement {
 	@property({ type: String }) private _content = "";

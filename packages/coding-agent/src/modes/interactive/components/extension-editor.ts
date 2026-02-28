@@ -1,6 +1,8 @@
 /**
- * Multi-line editor component for extensions.
- * Supports Ctrl+G for external editor.
+ * 扩展多行编辑器组件。
+ *
+ * 该文件提供用于扩展系统的多行文本编辑器，
+ * 支持通过快捷键调用外部编辑器（如 vim、nano）进行编辑。
  */
 
 import { spawnSync } from "node:child_process";
@@ -21,6 +23,11 @@ import { getEditorTheme, theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 import { appKeyHint, keyHint } from "./keybinding-hints.js";
 
+/**
+ * 扩展编辑器组件。
+ * 在边框内提供多行文本编辑功能，支持预填充内容、
+ * 提交/取消操作和通过外部编辑器（$VISUAL/$EDITOR）编辑。
+ */
 export class ExtensionEditorComponent extends Container {
 	private editor: Editor;
 	private onSubmitCallback: (value: string) => void;

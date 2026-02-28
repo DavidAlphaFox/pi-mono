@@ -1,3 +1,15 @@
+/**
+ * 工具执行渲染组件。
+ *
+ * 该文件提供所有内置工具调用（read、write、edit、bash、ls、find、grep 等）
+ * 和自定义工具的执行结果渲染。支持：
+ * - 语法高亮代码显示
+ * - Diff 预览（编辑操作）
+ * - 图片显示（Kitty 协议转换）
+ * - 输出截断和展开/折叠
+ * - 流式输出更新
+ */
+
 import * as os from "node:os";
 import {
 	Box,
@@ -55,6 +67,7 @@ function str(value: unknown): string | null {
 	return null; // Invalid type
 }
 
+/** 工具执行组件的配置选项 */
 export interface ToolExecutionOptions {
 	showImages?: boolean; // default: true (only used if terminal supports images)
 }
@@ -68,7 +81,8 @@ type WriteHighlightCache = {
 };
 
 /**
- * Component that renders a tool call with its result (updateable)
+ * 工具调用渲染组件。
+ * 渲染工具调用及其结果，支持实时更新、展开/折叠和多种工具类型的专用渲染。
  */
 export class ToolExecutionComponent extends Container {
 	private contentBox: Box; // Used for custom tools and bash visual truncation

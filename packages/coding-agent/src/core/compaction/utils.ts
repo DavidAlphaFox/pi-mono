@@ -1,5 +1,12 @@
 /**
- * Shared utilities for compaction and branch summarization.
+ * 压缩和分支摘要的共享工具函数
+ *
+ * 本文件提供了上下文压缩和分支摘要模块共用的工具函数，包括：
+ * 1. 文件操作跟踪：记录工具调用中的读取、写入和编辑操作
+ * 2. 文件列表计算：区分只读文件和已修改文件
+ * 3. 文件操作的 XML 格式化：用于附加到摘要末尾
+ * 4. 消息序列化：将 LLM 消息转换为纯文本格式（防止模型继续对话）
+ * 5. 摘要系统提示词
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
@@ -9,12 +16,17 @@ import type { Message } from "@mariozechner/pi-ai";
 // File Operation Tracking
 // ============================================================================
 
+/** 文件操作记录，分别跟踪读取、写入和编辑的文件 */
 export interface FileOperations {
+	/** 被读取的文件集合 */
 	read: Set<string>;
+	/** 被写入（新建）的文件集合 */
 	written: Set<string>;
+	/** 被编辑（修改）的文件集合 */
 	edited: Set<string>;
 }
 
+/** 创建空的文件操作记录 */
 export function createFileOps(): FileOperations {
 	return {
 		read: new Set(),
@@ -24,7 +36,7 @@ export function createFileOps(): FileOperations {
 }
 
 /**
- * Extract file operations from tool calls in an assistant message.
+ * 从助手消息的工具调用中提取文件操作记录。
  */
 export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOperations): void {
 	if (message.role !== "assistant") return;
@@ -56,8 +68,8 @@ export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOp
 }
 
 /**
- * Compute final file lists from file operations.
- * Returns readFiles (files only read, not modified) and modifiedFiles.
+ * 从文件操作记录计算最终的文件列表。
+ * 返回 readFiles（仅被读取未修改的文件）和 modifiedFiles（被修改的文件）。
  */
 export function computeFileLists(fileOps: FileOperations): { readFiles: string[]; modifiedFiles: string[] } {
 	const modified = new Set([...fileOps.edited, ...fileOps.written]);
@@ -67,7 +79,7 @@ export function computeFileLists(fileOps: FileOperations): { readFiles: string[]
 }
 
 /**
- * Format file operations as XML tags for summary.
+ * 将文件操作格式化为 XML 标签，用于附加到摘要末尾。
  */
 export function formatFileOperations(readFiles: string[], modifiedFiles: string[]): string {
 	const sections: string[] = [];
@@ -86,9 +98,9 @@ export function formatFileOperations(readFiles: string[], modifiedFiles: string[
 // ============================================================================
 
 /**
- * Serialize LLM messages to text for summarization.
- * This prevents the model from treating it as a conversation to continue.
- * Call convertToLlm() first to handle custom message types.
+ * 将 LLM 消息序列化为纯文本格式，用于摘要生成。
+ * 这样可以防止模型将其视为需要继续的对话。
+ * 使用前需先调用 convertToLlm() 处理自定义消息类型。
  */
 export function serializeConversation(messages: Message[]): string {
 	const parts: string[] = [];

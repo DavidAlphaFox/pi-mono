@@ -1,3 +1,10 @@
+/**
+ * OAuth 登录对话框组件。
+ *
+ * 该文件提供 OAuth 登录流程的交互式对话框，
+ * 支持显示登录 URL、自动打开浏览器、手动输入授权码等功能。
+ */
+
 import { getOAuthProviders } from "@mariozechner/pi-ai";
 import { Container, type Focusable, getEditorKeybindings, Input, Spacer, Text, type TUI } from "@mariozechner/pi-tui";
 import { exec } from "child_process";
@@ -6,7 +13,9 @@ import { DynamicBorder } from "./dynamic-border.js";
 import { keyHint } from "./keybinding-hints.js";
 
 /**
- * Login dialog component - replaces editor during OAuth login flow
+ * 登录对话框组件。
+ * 在 OAuth 登录流程中替代编辑器，显示登录 URL 和输入框。
+ * 实现 Focusable 接口以支持 IME 光标定位。
  */
 export class LoginDialogComponent extends Container implements Focusable {
 	private contentContainer: Container;

@@ -1,7 +1,21 @@
+/**
+ * @file 核心类型定义文件
+ *
+ * 本文件定义了 AI 统一抽象层的所有核心类型，包括：
+ * - API 和提供商的类型标识
+ * - 流式请求选项（温度、最大令牌数、信号等）
+ * - 统一的消息格式（用户消息、助手消息、工具结果消息）
+ * - 内容块类型（文本、思考过程、图像、工具调用）
+ * - 用量和成本统计
+ * - 模型定义接口
+ * - 兼容性配置（OpenAI 兼容、OpenRouter 路由等）
+ */
+
 import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
 export type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
+/** 已知的 API 协议标识，每种协议对应一种特定的 API 通信格式 */
 export type KnownApi =
 	| "openai-completions"
 	| "openai-responses"
@@ -13,8 +27,10 @@ export type KnownApi =
 	| "google-gemini-cli"
 	| "google-vertex";
 
+/** API 类型，可以是已知 API 或自定义字符串 */
 export type Api = KnownApi | (string & {});
 
+/** 已知的提供商标识，涵盖 20+ 主流 AI 服务提供商 */
 export type KnownProvider =
 	| "amazon-bedrock"
 	| "anthropic"
@@ -38,11 +54,13 @@ export type KnownProvider =
 	| "huggingface"
 	| "opencode"
 	| "kimi-coding";
+/** 提供商类型，可以是已知提供商或自定义字符串 */
 export type Provider = KnownProvider | string;
 
+/** 思考深度级别，控制模型推理的深度（从 minimal 到 xhigh） */
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";
 
-/** Token budgets for each thinking level (token-based providers only) */
+/** 各思考级别的令牌预算（仅适用于基于令牌的提供商） */
 export interface ThinkingBudgets {
 	minimal?: number;
 	low?: number;
@@ -50,11 +68,13 @@ export interface ThinkingBudgets {
 	high?: number;
 }
 
-// Base options all providers share
+/** 缓存保留策略：none 不缓存，short 短期缓存，long 长期缓存 */
 export type CacheRetention = "none" | "short" | "long";
 
+/** 传输协议类型：SSE 服务器推送事件、WebSocket 或自动选择 */
 export type Transport = "sse" | "websocket" | "auto";
 
+/** 所有提供商共享的基础流式请求选项 */
 export interface StreamOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -102,52 +122,58 @@ export interface StreamOptions {
 	metadata?: Record<string, unknown>;
 }
 
+/** 提供商级别的流式选项，允许传入提供商特定的额外字段 */
 export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
 
-// Unified options with reasoning passed to streamSimple() and completeSimple()
+/** 简化的统一流式选项，包含推理级别配置，用于 streamSimple() 和 completeSimple() */
 export interface SimpleStreamOptions extends StreamOptions {
 	reasoning?: ThinkingLevel;
 	/** Custom token budgets for thinking levels (token-based providers only) */
 	thinkingBudgets?: ThinkingBudgets;
 }
 
-// Generic StreamFunction with typed options
+/** 通用的流式处理函数类型，支持泛型 API 和选项类型 */
 export type StreamFunction<TApi extends Api = Api, TOptions extends StreamOptions = StreamOptions> = (
 	model: Model<TApi>,
 	context: Context,
 	options?: TOptions,
 ) => AssistantMessageEventStream;
 
+/** 文本内容块 */
 export interface TextContent {
 	type: "text";
 	text: string;
-	textSignature?: string; // e.g., for OpenAI responses, the message ID
+	textSignature?: string; // 文本签名，例如 OpenAI Responses API 的消息 ID
 }
 
+/** 思考/推理内容块，包含模型的内部推理过程 */
 export interface ThinkingContent {
 	type: "thinking";
 	thinking: string;
-	thinkingSignature?: string; // e.g., for OpenAI responses, the reasoning item ID
+	thinkingSignature?: string; // 思考签名，例如 OpenAI Responses API 的推理项 ID
 	/** When true, the thinking content was redacted by safety filters. The opaque
 	 *  encrypted payload is stored in `thinkingSignature` so it can be passed back
 	 *  to the API for multi-turn continuity. */
 	redacted?: boolean;
 }
 
+/** 图像内容块 */
 export interface ImageContent {
 	type: "image";
-	data: string; // base64 encoded image data
-	mimeType: string; // e.g., "image/jpeg", "image/png"
+	data: string; // base64 编码的图像数据
+	mimeType: string; // MIME 类型，如 "image/jpeg"、"image/png"
 }
 
+/** 工具调用块，表示模型请求调用一个外部工具 */
 export interface ToolCall {
 	type: "toolCall";
 	id: string;
 	name: string;
 	arguments: Record<string, any>;
-	thoughtSignature?: string; // Google-specific: opaque signature for reusing thought context
+	thoughtSignature?: string; // Google 特有：用于复用思考上下文的不透明签名
 }
 
+/** 令牌使用量统计，包含输入、输出、缓存读写及对应成本 */
 export interface Usage {
 	input: number;
 	output: number;
@@ -163,14 +189,17 @@ export interface Usage {
 	};
 }
 
+/** 停止原因：正常结束、长度限制、工具调用、错误或被中止 */
 export type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
 
+/** 用户消息 */
 export interface UserMessage {
 	role: "user";
 	content: string | (TextContent | ImageContent)[];
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
+/** 助手（模型）响应消息，包含内容块、用量统计和停止原因 */
 export interface AssistantMessage {
 	role: "assistant";
 	content: (TextContent | ThinkingContent | ToolCall)[];
@@ -183,6 +212,7 @@ export interface AssistantMessage {
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
+/** 工具执行结果消息，包含工具输出内容和错误状态 */
 export interface ToolResultMessage<TDetails = any> {
 	role: "toolResult";
 	toolCallId: string;
@@ -193,22 +223,26 @@ export interface ToolResultMessage<TDetails = any> {
 	timestamp: number; // Unix timestamp in milliseconds
 }
 
+/** 消息联合类型，可以是用户消息、助手消息或工具结果消息 */
 export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 
 import type { TSchema } from "@sinclair/typebox";
 
+/** 工具定义，包含名称、描述和 JSON Schema 参数定义 */
 export interface Tool<TParameters extends TSchema = TSchema> {
 	name: string;
 	description: string;
 	parameters: TParameters;
 }
 
+/** 请求上下文，包含系统提示词、消息历史和可用工具列表 */
 export interface Context {
 	systemPrompt?: string;
 	messages: Message[];
 	tools?: Tool[];
 }
 
+/** 助手消息流式事件类型，表示流式响应中的各种事件（开始、文本增量、工具调用等） */
 export type AssistantMessageEvent =
 	| { type: "start"; partial: AssistantMessage }
 	| { type: "text_start"; contentIndex: number; partial: AssistantMessage }
@@ -285,7 +319,7 @@ export interface VercelGatewayRouting {
 	order?: string[];
 }
 
-// Model interface for the unified model system
+/** 统一模型接口，定义模型的所有属性（ID、提供商、成本、上下文窗口等） */
 export interface Model<TApi extends Api> {
 	id: string;
 	name: string;

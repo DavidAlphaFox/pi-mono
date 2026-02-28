@@ -1,5 +1,13 @@
 /**
- * Model registry - manages built-in and custom models, provides API key resolution.
+ * 模型注册表 - 管理内置和自定义模型，提供 API 密钥解析
+ *
+ * 职责：
+ * - 加载内置模型（来自 pi-ai 包的各提供商模型）
+ * - 加载自定义模型（来自 models.json 配置文件）
+ * - 支持模型属性覆盖（baseUrl、headers、cost 等）
+ * - 通过 AuthStorage 解析 API 密钥
+ * - 支持扩展动态注册/注销提供商
+ * - 提供模型查找、过滤和可用性检查
  */
 
 import {
@@ -214,7 +222,14 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 export const clearApiKeyCache = clearConfigValueCache;
 
 /**
- * Model registry - loads and manages models, resolves API keys via AuthStorage.
+ * 模型注册表 - 加载和管理模型，通过 AuthStorage 解析 API 密钥。
+ *
+ * 核心功能：
+ * - getAll(): 获取所有模型（内置 + 自定义）
+ * - getAvailable(): 获取有认证配置的可用模型
+ * - find(): 按提供商和 ID 查找模型
+ * - registerProvider(): 动态注册提供商（扩展使用）
+ * - refresh(): 从磁盘重新加载模型
  */
 export class ModelRegistry {
 	private models: Model<Api>[] = [];
@@ -665,7 +680,8 @@ export class ModelRegistry {
 }
 
 /**
- * Input type for registerProvider API.
+ * registerProvider API 的输入类型。
+ * 用于扩展动态注册自定义模型提供商。
  */
 export interface ProviderConfigInput {
 	baseUrl?: string;

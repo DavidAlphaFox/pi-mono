@@ -1,11 +1,21 @@
+/**
+ * @file Input.ts
+ * @description 通用输入框函数式组件。
+ * 基于 mini-lit 的 fc（函数式组件）创建，提供统一样式的输入框，
+ * 支持多种类型（text/email/password 等）、尺寸、标签、错误提示和验证。
+ */
+
 import { type BaseComponentProps, fc } from "@mariozechner/mini-lit/dist/mini.js";
 import { html } from "lit";
 import { type Ref, ref } from "lit/directives/ref.js";
 import { i18n } from "../utils/i18n.js";
 
+/** 输入框类型 */
 export type InputType = "text" | "email" | "password" | "number" | "url" | "tel" | "search";
+/** 输入框尺寸 */
 export type InputSize = "sm" | "md" | "lg";
 
+/** 输入框组件属性接口 */
 export interface InputProps extends BaseComponentProps {
 	type?: InputType;
 	size?: InputSize;
@@ -27,6 +37,10 @@ export interface InputProps extends BaseComponentProps {
 	onKeyUp?: (e: KeyboardEvent) => void;
 }
 
+/**
+ * 通用输入框函数式组件。
+ * 支持标签、错误提示、尺寸变体、禁用状态等，使用 Tailwind CSS 样式。
+ */
 export const Input = fc<InputProps>(
 	({
 		type = "text",

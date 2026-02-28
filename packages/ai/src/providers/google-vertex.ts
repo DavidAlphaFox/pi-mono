@@ -1,3 +1,14 @@
+/**
+ * @file Google Vertex AI 提供商
+ *
+ * 本文件实现了 Google Vertex AI 平台上 Gemini 模型的流式调用，支持：
+ * - 通过 GCP 项目 ID 和区域（location）进行身份验证
+ * - Gemini 2.x 系列：基于 budgetTokens 的思考预算控制
+ * - Gemini 3 系列（Pro/Flash）：基于 ThinkingLevel 枚举的思考级别控制
+ * - 思考签名（Thought Signature）的流式保留
+ * - 与 google.ts 共享消息转换和流处理逻辑
+ */
+
 import {
 	type GenerateContentConfig,
 	type GenerateContentParameters,
@@ -33,6 +44,7 @@ import {
 } from "./google-shared.js";
 import { buildBaseOptions, clampReasoning } from "./simple-options.js";
 
+/** Google Vertex AI 流式调用选项 */
 export interface GoogleVertexOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "any";
 	thinking?: {
@@ -57,6 +69,7 @@ const THINKING_LEVEL_MAP: Record<GoogleThinkingLevel, ThinkingLevel> = {
 // Counter for generating unique tool call IDs
 let toolCallCounter = 0;
 
+/** Google Vertex AI 的底层流式调用函数 */
 export const streamGoogleVertex: StreamFunction<"google-vertex", GoogleVertexOptions> = (
 	model: Model<"google-vertex">,
 	context: Context,
@@ -280,6 +293,7 @@ export const streamGoogleVertex: StreamFunction<"google-vertex", GoogleVertexOpt
 	return stream;
 };
 
+/** Google Vertex AI 的简化版流式调用函数，自动根据模型系列选择思考配置 */
 export const streamSimpleGoogleVertex: StreamFunction<"google-vertex", SimpleStreamOptions> = (
 	model: Model<"google-vertex">,
 	context: Context,

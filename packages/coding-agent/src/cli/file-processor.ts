@@ -1,5 +1,11 @@
 /**
- * Process @file CLI arguments into text content and image attachments
+ * @file 参数处理模块 - 将 CLI 的 @文件 参数转换为文本内容和图片附件
+ *
+ * 职责：
+ * - 解析 @文件路径 参数，区分文本文件和图片文件
+ * - 对图片文件进行自动缩放（可配置）
+ * - 将文本文件内容包裹在 XML 标签中用于 LLM 上下文
+ * - 为图片文件生成 base64 编码内容
  */
 
 import { access, readFile, stat } from "node:fs/promises";
@@ -10,17 +16,19 @@ import { resolveReadPath } from "../core/tools/path-utils.js";
 import { formatDimensionNote, resizeImage } from "../utils/image-resize.js";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.js";
 
+/** 处理后的文件结果 */
 export interface ProcessedFiles {
 	text: string;
 	images: ImageContent[];
 }
 
+/** 文件处理选项 */
 export interface ProcessFileOptions {
 	/** Whether to auto-resize images to 2000x2000 max. Default: true */
 	autoResizeImages?: boolean;
 }
 
-/** Process @file arguments into text content and image attachments */
+/** 将 @file 参数处理为文本内容和图片附件 */
 export async function processFileArguments(fileArgs: string[], options?: ProcessFileOptions): Promise<ProcessedFiles> {
 	const autoResizeImages = options?.autoResizeImages ?? true;
 	let text = "";

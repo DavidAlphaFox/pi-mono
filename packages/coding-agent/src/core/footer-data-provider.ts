@@ -1,9 +1,19 @@
+/**
+ * 页脚数据提供器模块
+ *
+ * 职责：
+ * - 提供 git 分支名（支持 worktree，通过文件监视自动更新）
+ * - 管理扩展状态文本（通过 ctx.ui.setStatus() 设置）
+ * - 跟踪可用提供商数量
+ * - 提供只读视图给扩展使用
+ */
+
 import { existsSync, type FSWatcher, readFileSync, statSync, watch } from "fs";
 import { dirname, join, resolve } from "path";
 
 /**
- * Find the git HEAD path by walking up from cwd.
- * Handles both regular git repos (.git is a directory) and worktrees (.git is a file).
+ * 从 cwd 向上查找 git HEAD 文件路径
+ * 同时处理常规 git 仓库（.git 是目录）和 worktree（.git 是文件）
  */
 function findGitHeadPath(): string | null {
 	let dir = process.cwd();
@@ -34,8 +44,8 @@ function findGitHeadPath(): string | null {
 }
 
 /**
- * Provides git branch and extension statuses - data not otherwise accessible to extensions.
- * Token stats, model info available via ctx.sessionManager and ctx.model.
+ * 页脚数据提供器 - 提供 git 分支和扩展状态等扩展无法直接访问的数据
+ * token 统计和模型信息可通过 ctx.sessionManager 和 ctx.model 获取
  */
 export class FooterDataProvider {
 	private extensionStatuses = new Map<string, string>();
@@ -137,7 +147,7 @@ export class FooterDataProvider {
 	}
 }
 
-/** Read-only view for extensions - excludes setExtensionStatus, setAvailableProviderCount and dispose */
+/** 扩展使用的只读视图 - 排除 setExtensionStatus、setAvailableProviderCount 和 dispose */
 export type ReadonlyFooterDataProvider = Pick<
 	FooterDataProvider,
 	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "onBranchChange"

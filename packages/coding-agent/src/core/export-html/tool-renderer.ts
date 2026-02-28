@@ -1,8 +1,8 @@
 /**
- * Tool HTML renderer for custom tools in HTML export.
+ * HTML 导出中自定义工具的 HTML 渲染器
  *
- * Renders custom tool calls and results to HTML by invoking their TUI renderers
- * and converting the ANSI output to HTML.
+ * 本文件通过调用工具的 TUI 渲染器并将 ANSI 输出转换为 HTML，
+ * 实现了自定义工具调用和结果的 HTML 渲染。
  */
 
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
@@ -10,19 +10,21 @@ import type { Theme } from "../../modes/interactive/theme/theme.js";
 import type { ToolDefinition } from "../extensions/types.js";
 import { ansiLinesToHtml } from "./ansi-to-html.js";
 
+/** 工具 HTML 渲染器的依赖项 */
 export interface ToolHtmlRendererDeps {
-	/** Function to look up tool definition by name */
+	/** 按名称查找工具定义的函数 */
 	getToolDefinition: (name: string) => ToolDefinition | undefined;
-	/** Theme for styling */
+	/** 用于样式的主题 */
 	theme: Theme;
-	/** Terminal width for rendering (default: 100) */
+	/** 渲染的终端宽度（默认 100） */
 	width?: number;
 }
 
+/** 工具 HTML 渲染器接口 */
 export interface ToolHtmlRenderer {
-	/** Render a tool call to HTML. Returns undefined if tool has no custom renderer. */
+	/** 将工具调用渲染为 HTML，无自定义渲染器时返回 undefined */
 	renderCall(toolName: string, args: unknown): string | undefined;
-	/** Render a tool result to HTML. Returns undefined if tool has no custom renderer. */
+	/** 将工具结果渲染为 HTML，无自定义渲染器时返回 undefined */
 	renderResult(
 		toolName: string,
 		result: Array<{ type: string; text?: string; data?: string; mimeType?: string }>,
@@ -32,10 +34,10 @@ export interface ToolHtmlRenderer {
 }
 
 /**
- * Create a tool HTML renderer.
+ * 创建工具 HTML 渲染器。
  *
- * The renderer looks up tool definitions and invokes their renderCall/renderResult
- * methods, converting the resulting TUI Component output (ANSI) to HTML.
+ * 渲染器查找工具定义并调用其 renderCall/renderResult 方法，
+ * 将生成的 TUI 组件输出（ANSI 格式）转换为 HTML。
  */
 export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRenderer {
 	const { getToolDefinition, theme, width = 100 } = deps;

@@ -1,42 +1,79 @@
+/**
+ * @file 终端图像支持
+ *
+ * 本文件实现了终端图像渲染功能，支持以下协议：
+ * - Kitty 图形协议（Kitty、Ghostty、WezTerm）
+ * - iTerm2 内联图像协议（iTerm2）
+ *
+ * 主要功能：
+ * - 检测终端能力（图像协议、真彩色、超链接支持）
+ * - 图像编码和传输（base64 分块传输）
+ * - 图像尺寸获取（PNG、JPEG、GIF、WebP）
+ * - 图像行数计算（基于单元格像素尺寸）
+ * - 图像 ID 管理（用于 Kitty 协议的图像替换和删除）
+ */
+
+/** 图像协议类型：Kitty、iTerm2 或不支持（null） */
 export type ImageProtocol = "kitty" | "iterm2" | null;
 
+/** 终端能力描述接口 */
 export interface TerminalCapabilities {
+	/** 支持的图像协议类型 */
 	images: ImageProtocol;
+	/** 是否支持真彩色（24位色） */
 	trueColor: boolean;
+	/** 是否支持超链接（OSC 8） */
 	hyperlinks: boolean;
 }
 
+/** 终端单元格的像素尺寸 */
 export interface CellDimensions {
+	/** 单元格宽度（像素） */
 	widthPx: number;
+	/** 单元格高度（像素） */
 	heightPx: number;
 }
 
+/** 图像的像素尺寸 */
 export interface ImageDimensions {
+	/** 图像宽度（像素） */
 	widthPx: number;
+	/** 图像高度（像素） */
 	heightPx: number;
 }
 
+/** 图像渲染选项 */
 export interface ImageRenderOptions {
+	/** 最大宽度（单元格数） */
 	maxWidthCells?: number;
+	/** 最大高度（单元格数） */
 	maxHeightCells?: number;
+	/** 是否保持纵横比 */
 	preserveAspectRatio?: boolean;
-	/** Kitty image ID. If provided, reuses/replaces existing image with this ID. */
+	/** Kitty 图像 ID。如果提供，则复用/替换具有此 ID 的现有图像。 */
 	imageId?: number;
 }
 
+/** 缓存的终端能力检测结果 */
 let cachedCapabilities: TerminalCapabilities | null = null;
 
-// Default cell dimensions - updated by TUI when terminal responds to query
+// 默认单元格尺寸 - 当终端响应查询时由 TUI 更新
 let cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 };
 
+/** 获取当前终端单元格的像素尺寸 */
 export function getCellDimensions(): CellDimensions {
 	return cellDimensions;
 }
 
+/** 设置终端单元格的像素尺寸（通常由 TUI 在收到终端响应后调用） */
 export function setCellDimensions(dims: CellDimensions): void {
 	cellDimensions = dims;
 }
 
+/**
+ * 检测当前终端的能力（图像协议、真彩色、超链接）。
+ * 通过检查环境变量来判断终端类型。
+ */
 export function detectCapabilities(): TerminalCapabilities {
 	const termProgram = process.env.TERM_PROGRAM?.toLowerCase() || "";
 	const term = process.env.TERM?.toLowerCase() || "";
@@ -70,6 +107,7 @@ export function detectCapabilities(): TerminalCapabilities {
 	return { images: null, trueColor, hyperlinks: true };
 }
 
+/** 获取缓存的终端能力（首次调用时自动检测） */
 export function getCapabilities(): TerminalCapabilities {
 	if (!cachedCapabilities) {
 		cachedCapabilities = detectCapabilities();
@@ -77,13 +115,17 @@ export function getCapabilities(): TerminalCapabilities {
 	return cachedCapabilities;
 }
 
+/** 重置终端能力缓存（用于测试或终端切换） */
 export function resetCapabilitiesCache(): void {
 	cachedCapabilities = null;
 }
 
+/** Kitty 图形协议前缀 */
 const KITTY_PREFIX = "\x1b_G";
+/** iTerm2 内联图像协议前缀 */
 const ITERM2_PREFIX = "\x1b]1337;File=";
 
+/** 检查一行是否包含图像数据（Kitty 或 iTerm2 协议） */
 export function isImageLine(line: string): boolean {
 	// Fast path: sequence at line start (single-row images)
 	if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX)) {
@@ -94,15 +136,19 @@ export function isImageLine(line: string): boolean {
 }
 
 /**
- * Generate a random image ID for Kitty graphics protocol.
- * Uses random IDs to avoid collisions between different module instances
- * (e.g., main app vs extensions).
+ * 为 Kitty 图形协议生成随机图像 ID。
+ * 使用随机 ID 以避免不同模块实例之间的冲突
+ * （例如主应用与扩展之间）。
  */
 export function allocateImageId(): number {
 	// Use random ID in range [1, 0xffffffff] to avoid collisions
 	return Math.floor(Math.random() * 0xfffffffe) + 1;
 }
 
+/**
+ * 将 base64 图像数据编码为 Kitty 图形协议序列。
+ * 大数据会自动分块传输（每块 4096 字节）。
+ */
 export function encodeKitty(
 	base64Data: string,
 	options: {
@@ -147,21 +193,22 @@ export function encodeKitty(
 }
 
 /**
- * Delete a Kitty graphics image by ID.
- * Uses uppercase 'I' to also free the image data.
+ * 通过 ID 删除 Kitty 图形图像。
+ * 使用大写 'I' 同时释放图像数据。
  */
 export function deleteKittyImage(imageId: number): string {
 	return `\x1b_Ga=d,d=I,i=${imageId}\x1b\\`;
 }
 
 /**
- * Delete all visible Kitty graphics images.
- * Uses uppercase 'A' to also free the image data.
+ * 删除所有可见的 Kitty 图形图像。
+ * 使用大写 'A' 同时释放图像数据。
  */
 export function deleteAllKittyImages(): string {
 	return `\x1b_Ga=d,d=A\x1b\\`;
 }
 
+/** 将 base64 图像数据编码为 iTerm2 内联图像协议序列 */
 export function encodeITerm2(
 	base64Data: string,
 	options: {
@@ -187,6 +234,7 @@ export function encodeITerm2(
 	return `\x1b]1337;File=${params.join(";")}:${base64Data}\x07`;
 }
 
+/** 计算图像在给定宽度下需要占用的终端行数（保持纵横比） */
 export function calculateImageRows(
 	imageDimensions: ImageDimensions,
 	targetWidthCells: number,
@@ -199,6 +247,7 @@ export function calculateImageRows(
 	return Math.max(1, rows);
 }
 
+/** 从 base64 编码的 PNG 数据中提取图像尺寸 */
 export function getPngDimensions(base64Data: string): ImageDimensions | null {
 	try {
 		const buffer = Buffer.from(base64Data, "base64");
@@ -220,6 +269,7 @@ export function getPngDimensions(base64Data: string): ImageDimensions | null {
 	}
 }
 
+/** 从 base64 编码的 JPEG 数据中提取图像尺寸（扫描 SOF 标记） */
 export function getJpegDimensions(base64Data: string): ImageDimensions | null {
 	try {
 		const buffer = Buffer.from(base64Data, "base64");
@@ -263,6 +313,7 @@ export function getJpegDimensions(base64Data: string): ImageDimensions | null {
 	}
 }
 
+/** 从 base64 编码的 GIF 数据中提取图像尺寸 */
 export function getGifDimensions(base64Data: string): ImageDimensions | null {
 	try {
 		const buffer = Buffer.from(base64Data, "base64");
@@ -285,6 +336,7 @@ export function getGifDimensions(base64Data: string): ImageDimensions | null {
 	}
 }
 
+/** 从 base64 编码的 WebP 数据中提取图像尺寸（支持 VP8、VP8L、VP8X 格式） */
 export function getWebpDimensions(base64Data: string): ImageDimensions | null {
 	try {
 		const buffer = Buffer.from(base64Data, "base64");
@@ -324,6 +376,7 @@ export function getWebpDimensions(base64Data: string): ImageDimensions | null {
 	}
 }
 
+/** 根据 MIME 类型自动选择合适的方法获取图像尺寸 */
 export function getImageDimensions(base64Data: string, mimeType: string): ImageDimensions | null {
 	if (mimeType === "image/png") {
 		return getPngDimensions(base64Data);
@@ -340,6 +393,10 @@ export function getImageDimensions(base64Data: string, mimeType: string): ImageD
 	return null;
 }
 
+/**
+ * 使用当前终端的图像协议渲染图像。
+ * 返回转义序列字符串和占用的行数，如果终端不支持图像则返回 null。
+ */
 export function renderImage(
 	base64Data: string,
 	imageDimensions: ImageDimensions,
@@ -372,6 +429,7 @@ export function renderImage(
 	return null;
 }
 
+/** 当终端不支持图像时生成文本回退描述 */
 export function imageFallback(mimeType: string, dimensions?: ImageDimensions, filename?: string): string {
 	const parts: string[] = [];
 	if (filename) parts.push(filename);

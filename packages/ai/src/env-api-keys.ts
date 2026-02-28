@@ -1,4 +1,16 @@
-// NEVER convert to top-level imports - breaks browser/Vite builds (web-ui)
+/**
+ * @file 环境变量 API 密钥解析
+ *
+ * 本文件负责从环境变量中获取各提供商的 API 密钥，支持：
+ * - 标准 API 密钥（如 OPENAI_API_KEY、ANTHROPIC_API_KEY）
+ * - OAuth 令牌（如 ANTHROPIC_OAUTH_TOKEN）
+ * - 凭据文件检测（如 Google Vertex AI 的 ADC 凭据）
+ * - 多种 AWS 认证方式（IAM 密钥、ECS 角色、IRSA 等）
+ *
+ * 注意：顶层导入不能使用 Node.js 模块，否则会破坏浏览器/Vite 构建。
+ */
+
+// 绝不能转为顶层导入 - 会破坏浏览器/Vite 构建（web-ui）
 let _existsSync: typeof import("node:fs").existsSync | null = null;
 let _homedir: typeof import("node:os").homedir | null = null;
 let _join: typeof import("node:path").join | null = null;
@@ -18,8 +30,10 @@ if (typeof process !== "undefined" && (process.versions?.node || process.version
 
 import type { KnownProvider } from "./types.js";
 
+/** Vertex AI ADC 凭据存在性的缓存值（null 表示尚未检测） */
 let cachedVertexAdcCredentialsExists: boolean | null = null;
 
+/** 检测 Google Vertex AI 的应用默认凭据（ADC）是否存在 */
 function hasVertexAdcCredentials(): boolean {
 	if (cachedVertexAdcCredentialsExists === null) {
 		// If node modules haven't loaded yet (async import race at startup),

@@ -1,12 +1,15 @@
 /**
- * Shared command execution utilities for extensions and custom tools.
+ * 共享命令执行工具模块
+ *
+ * 职责：
+ * - 为扩展和自定义工具提供 shell 命令执行功能
+ * - 支持超时和 AbortSignal 取消
+ * - 提供优雅的进程终止（SIGTERM → 5s 后 SIGKILL）
  */
 
 import { spawn } from "node:child_process";
 
-/**
- * Options for executing shell commands.
- */
+/** shell 命令执行选项 */
 export interface ExecOptions {
 	/** AbortSignal to cancel the command */
 	signal?: AbortSignal;
@@ -16,9 +19,7 @@ export interface ExecOptions {
 	cwd?: string;
 }
 
-/**
- * Result of executing a shell command.
- */
+/** shell 命令执行结果 */
 export interface ExecResult {
 	stdout: string;
 	stderr: string;
@@ -27,8 +28,8 @@ export interface ExecResult {
 }
 
 /**
- * Execute a shell command and return stdout/stderr/code.
- * Supports timeout and abort signal.
+ * 执行 shell 命令并返回 stdout/stderr/退出码
+ * 支持超时和取消信号
  */
 export async function execCommand(
 	command: string,

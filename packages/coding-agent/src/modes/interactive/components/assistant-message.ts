@@ -1,9 +1,19 @@
+/**
+ * 助手消息渲染组件。
+ *
+ * 该文件提供 AI 助手回复消息的完整渲染组件，
+ * 支持文本内容和思考块（thinking block）的显示，
+ * 以及错误和中止状态的处理。
+ */
+
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { Container, Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 
 /**
- * Component that renders a complete assistant message
+ * 助手消息渲染组件。
+ * 按序渲染消息中的文本和思考内容，支持隐藏/显示思考块，
+ * 并在消息中止或出错时显示对应的错误信息。
  */
 export class AssistantMessageComponent extends Container {
 	private contentContainer: Container;

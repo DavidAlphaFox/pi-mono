@@ -1,10 +1,17 @@
+/**
+ * @file RuntimeMessageRouter.ts
+ * @description 运行时消息路由器（单例）。
+ * 集中管理所有沙箱的 postMessage 通信，替代分散的 window.addEventListener("message")。
+ * 负责沙箱注册/注销、消息分发、响应路由等功能。
+ */
+
 import type { SandboxRuntimeProvider } from "./SandboxRuntimeProvider.js";
 
-// Type declaration for chrome extension API (when available)
+// Chrome 扩展 API 类型声明（可选可用）
 declare const chrome: any;
 
 /**
- * Message consumer interface - components that want to receive messages from sandboxes
+ * 消息消费者接口 - 需要接收沙箱消息的组件实现此接口。
  */
 export interface MessageConsumer {
 	/**

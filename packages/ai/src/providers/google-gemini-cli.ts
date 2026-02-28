@@ -1,7 +1,16 @@
 /**
- * Google Gemini CLI / Antigravity provider.
- * Shared implementation for both google-gemini-cli and google-antigravity providers.
- * Uses the Cloud Code Assist API endpoint to access Gemini and Claude models.
+ * @file Google Gemini CLI / Antigravity 提供商
+ *
+ * 本文件为 google-gemini-cli 和 google-antigravity 两个提供商的共享实现，
+ * 通过 Cloud Code Assist API（cloudcode-pa.googleapis.com）访问 Gemini 和 Claude 模型。
+ * 支持：
+ * - 生产端点（cloudcode-pa）和沙箱端点（daily-cloudcode-pa）的自动降级
+ * - OAuth 令牌认证（JSON 编码的 { token, projectId }）
+ * - SSE 流式解析，含空响应自动重试（最多 2 次）
+ * - 速率限制重试，支持从响应头和错误体中提取重试延迟
+ * - Gemini 3 模型的 ThinkingLevel 和 Gemini 2.x 的 ThinkingBudget
+ * - Claude 模型的交错思考（interleaved thinking）beta 头
+ * - Antigravity 特有的系统指令注入和请求标记
  */
 
 import type { Content, ThinkingConfig } from "@google/genai";
@@ -38,6 +47,7 @@ import { buildBaseOptions, clampReasoning } from "./simple-options.js";
  */
 export type GoogleThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
 
+/** Google Gemini CLI / Antigravity 流式调用选项 */
 export interface GoogleGeminiCliOptions extends StreamOptions {
 	toolChoice?: "auto" | "none" | "any";
 	/**
@@ -307,6 +317,7 @@ interface CloudCodeAssistResponseChunk {
 	traceId?: string;
 }
 
+/** Google Gemini CLI / Antigravity 的底层流式调用函数 */
 export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli", GoogleGeminiCliOptions> = (
 	model: Model<"google-gemini-cli">,
 	context: Context,
@@ -775,6 +786,7 @@ export const streamGoogleGeminiCli: StreamFunction<"google-gemini-cli", GoogleGe
 	return stream;
 };
 
+/** Google Gemini CLI / Antigravity 的简化版流式调用函数 */
 export const streamSimpleGoogleGeminiCli: StreamFunction<"google-gemini-cli", SimpleStreamOptions> = (
 	model: Model<"google-gemini-cli">,
 	context: Context,
@@ -830,6 +842,7 @@ export const streamSimpleGoogleGeminiCli: StreamFunction<"google-gemini-cli", Si
 	} satisfies GoogleGeminiCliOptions);
 };
 
+/** 构建 Cloud Code Assist API 请求体 */
 export function buildRequest(
 	model: Model<"google-gemini-cli">,
 	context: Context,

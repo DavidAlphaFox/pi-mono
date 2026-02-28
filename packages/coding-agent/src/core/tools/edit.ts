@@ -1,3 +1,15 @@
+/**
+ * 文件编辑工具
+ *
+ * 本文件实现了通过精确文本替换来编辑文件的工具，功能包括：
+ * 1. 精确匹配旧文本并替换为新文本（查找-替换模式）
+ * 2. 支持模糊匹配：自动处理尾随空白、Unicode 引号/破折号差异
+ * 3. 唯一性校验：旧文本必须在文件中唯一出现，否则报错
+ * 4. 保留原始换行符风格（CRLF/LF）和 BOM 标记
+ * 5. 生成 unified diff 用于变更预览
+ * 6. 可插拔的编辑操作（EditOperations），支持远程文件系统
+ */
+
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
 import { constants } from "fs";
@@ -19,25 +31,27 @@ const editSchema = Type.Object({
 	newText: Type.String({ description: "New text to replace the old text with" }),
 });
 
+/** 编辑工具的输入参数类型 */
 export type EditToolInput = Static<typeof editSchema>;
 
+/** 编辑工具的详细信息 */
 export interface EditToolDetails {
-	/** Unified diff of the changes made */
+	/** 变更的 unified diff 格式字符串 */
 	diff: string;
-	/** Line number of the first change in the new file (for editor navigation) */
+	/** 新文件中第一个变更的行号（用于编辑器导航） */
 	firstChangedLine?: number;
 }
 
 /**
- * Pluggable operations for the edit tool.
- * Override these to delegate file editing to remote systems (e.g., SSH).
+ * 编辑工具的可插拔操作接口。
+ * 可通过覆写此接口将文件编辑委托给远程系统（如 SSH）。
  */
 export interface EditOperations {
-	/** Read file contents as a Buffer */
+	/** 读取文件内容，返回 Buffer */
 	readFile: (absolutePath: string) => Promise<Buffer>;
-	/** Write content to a file */
+	/** 将内容写入文件 */
 	writeFile: (absolutePath: string, content: string) => Promise<void>;
-	/** Check if file is readable and writable (throw if not) */
+	/** 检查文件是否可读写（不可时抛出异常） */
 	access: (absolutePath: string) => Promise<void>;
 }
 
@@ -47,11 +61,16 @@ const defaultEditOperations: EditOperations = {
 	access: (path) => fsAccess(path, constants.R_OK | constants.W_OK),
 };
 
+/** 编辑工具的配置选项 */
 export interface EditToolOptions {
-	/** Custom operations for file editing. Default: local filesystem */
+	/** 自定义文件编辑操作，默认使用本地文件系统 */
 	operations?: EditOperations;
 }
 
+/**
+ * 创建绑定到指定工作目录的文件编辑工具实例。
+ * 通过精确文本匹配（支持模糊匹配）进行查找替换操作。
+ */
 export function createEditTool(cwd: string, options?: EditToolOptions): AgentTool<typeof editSchema> {
 	const ops = options?.operations ?? defaultEditOperations;
 
@@ -223,5 +242,5 @@ export function createEditTool(cwd: string, options?: EditToolOptions): AgentToo
 	};
 }
 
-/** Default edit tool using process.cwd() - for backwards compatibility */
+/** 使用 process.cwd() 的默认编辑工具实例，保持向后兼容 */
 export const editTool = createEditTool(process.cwd());

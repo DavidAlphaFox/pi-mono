@@ -1,5 +1,14 @@
 /**
- * Extension runner - executes extensions and manages their lifecycle.
+ * 扩展运行器 - 执行扩展并管理其生命周期
+ *
+ * 本文件实现了 ExtensionRunner 类，负责：
+ * 1. 管理已加载扩展的集合和共享运行时
+ * 2. 绑定核心操作（bindCore）和命令上下文（bindCommandContext）
+ * 3. 事件分发：将事件传递给所有注册了处理器的扩展
+ * 4. 工具管理：收集所有扩展注册的工具并提供查询接口
+ * 5. 命令和快捷键管理：处理冲突检测和诊断
+ * 6. 标志值管理：存储和读取扩展注册的 CLI 标志
+ * 7. 创建扩展上下文（ExtensionContext）供事件处理器和工具执行使用
  */
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
@@ -49,7 +58,7 @@ import type {
 	UserBashEventResult,
 } from "./types.js";
 
-// Keybindings for these actions cannot be overridden by extensions
+// 以下操作的快捷键不可被扩展覆盖
 const RESERVED_ACTIONS_FOR_EXTENSION_CONFLICTS: ReadonlyArray<KeyAction> = [
 	"interrupt",
 	"clear",
@@ -89,15 +98,15 @@ const buildBuiltinKeybindings = (effectiveKeybindings: Required<KeybindingsConfi
 	return builtinKeybindings;
 };
 
-/** Combined result from all before_agent_start handlers */
+/** 所有 before_agent_start 处理器的合并结果 */
 interface BeforeAgentStartCombinedResult {
 	messages?: NonNullable<BeforeAgentStartEventResult["message"]>[];
 	systemPrompt?: string;
 }
 
 /**
- * Events handled by the generic emit() method.
- * Events with dedicated emitXxx() methods are excluded for stronger type safety.
+ * 由通用 emit() 方法处理的事件类型。
+ * 拥有专用 emitXxx() 方法的事件被排除，以获得更强的类型安全。
  */
 type RunnerEmitEvent = Exclude<
 	ExtensionEvent,
@@ -131,29 +140,36 @@ type RunnerEmitResult<TEvent extends RunnerEmitEvent> = TEvent extends { type: "
 				? SessionBeforeTreeResult | undefined
 				: undefined;
 
+/** 扩展错误监听器 */
 export type ExtensionErrorListener = (error: ExtensionError) => void;
 
+/** 新建会话处理器 */
 export type NewSessionHandler = (options?: {
 	parentSession?: string;
 	setup?: (sessionManager: SessionManager) => Promise<void>;
 }) => Promise<{ cancelled: boolean }>;
 
+/** 分叉处理器 */
 export type ForkHandler = (entryId: string) => Promise<{ cancelled: boolean }>;
 
+/** 会话树导航处理器 */
 export type NavigateTreeHandler = (
 	targetId: string,
 	options?: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string },
 ) => Promise<{ cancelled: boolean }>;
 
+/** 切换会话处理器 */
 export type SwitchSessionHandler = (sessionPath: string) => Promise<{ cancelled: boolean }>;
 
+/** 重新加载处理器 */
 export type ReloadHandler = () => Promise<void>;
 
+/** 关闭处理器 */
 export type ShutdownHandler = () => void;
 
 /**
- * Helper function to emit session_shutdown event to extensions.
- * Returns true if the event was emitted, false if there were no handlers.
+ * 向扩展发送 session_shutdown 事件的辅助函数。
+ * 事件被发送时返回 true，无处理器时返回 false。
  */
 export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner | undefined): Promise<boolean> {
 	if (extensionRunner?.hasHandlers("session_shutdown")) {

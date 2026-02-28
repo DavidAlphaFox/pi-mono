@@ -1,7 +1,21 @@
+/**
+ * @file 跨提供商消息转换
+ *
+ * 本文件负责在不同 AI 提供商之间转换消息格式，主要处理：
+ * - 工具调用 ID 的规范化（不同提供商对 ID 格式有不同要求）
+ * - 思考块的跨模型处理（同模型保留签名，不同模型转为纯文本）
+ * - 错误/中止消息的过滤（跳过不完整的助手响应）
+ * - 孤立工具调用的合成结果插入（确保 API 消息序列的完整性）
+ */
+
 import type { Api, AssistantMessage, Message, Model, ToolCall, ToolResultMessage } from "../types.js";
 
 /**
- * Normalize tool call ID for cross-provider compatibility.
+ * 跨提供商消息转换主函数。
+ *
+ * 标准化工具调用 ID（如 OpenAI Responses API 生成的 450+ 字符 ID 需截断为
+ * Anthropic API 要求的最大 64 字符格式），处理思考块、过滤错误消息，
+ * 并为孤立的工具调用插入合成结果。
  * OpenAI Responses API generates IDs that are 450+ chars with special characters like `|`.
  * Anthropic APIs require IDs matching ^[a-zA-Z0-9_-]+$ (max 64 chars).
  */

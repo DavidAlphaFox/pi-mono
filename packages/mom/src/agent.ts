@@ -1,3 +1,15 @@
+/**
+ * @file agent.ts - Agent 运行器核心模块
+ *
+ * 本文件负责：
+ * 1. 创建和管理每个频道的 Agent 运行器（AgentRunner）
+ * 2. 构建 LLM 系统提示词（包含 Slack 格式、工具说明、事件系统、技能等）
+ * 3. 加载频道/工作区级别的记忆（MEMORY.md）和技能（skills/）
+ * 4. 处理 Agent 事件（工具执行、消息流式输出、自动压缩、重试等）
+ * 5. 管理用户消息的图片附件和非图片附件
+ * 6. 将 Agent 响应同步到 Slack（主消息、线程消息）
+ */
+
 import { Agent, type AgentEvent } from "@mariozechner/pi-agent-core";
 import { getModel, type ImageContent } from "@mariozechner/pi-ai";
 import {
@@ -23,25 +35,51 @@ import type { ChannelInfo, SlackContext, UserInfo } from "./slack.js";
 import type { ChannelStore } from "./store.js";
 import { createMomTools, setUploadFunction } from "./tools/index.js";
 
-// Hardcoded model for now - TODO: make configurable (issue #63)
+// 当前硬编码使用的模型 - TODO: 改为可配置 (issue #63)
 const model = getModel("anthropic", "claude-sonnet-4-5");
 
+/**
+ * 待处理的消息结构
+ * 当 Agent 正忙时，后续消息会被暂存
+ */
 export interface PendingMessage {
+	/** 发送者用户名 */
 	userName: string;
+	/** 消息文本 */
 	text: string;
+	/** 附件列表 */
 	attachments: { local: string }[];
+	/** 消息时间戳 */
 	timestamp: number;
 }
 
+/**
+ * Agent 运行器接口
+ * 每个频道拥有一个运行器实例，负责处理该频道的消息
+ */
 export interface AgentRunner {
+	/**
+	 * 运行 Agent 处理一条消息
+	 * @param ctx - Slack 上下文
+	 * @param store - 频道存储
+	 * @param pendingMessages - 待处理的消息队列
+	 * @returns 运行结果，包含停止原因和可选的错误消息
+	 */
 	run(
 		ctx: SlackContext,
 		store: ChannelStore,
 		pendingMessages?: PendingMessage[],
 	): Promise<{ stopReason: string; errorMessage?: string }>;
+	/** 中止当前运行 */
 	abort(): void;
 }
 
+/**
+ * 从认证存储中获取 Anthropic API 密钥
+ * @param authStorage - 认证存储实例
+ * @returns API 密钥字符串
+ * @throws 如果未找到 API 密钥
+ */
 async function getAnthropicApiKey(authStorage: AuthStorage): Promise<string> {
 	const key = await authStorage.getApiKey("anthropic");
 	if (!key) {
@@ -54,6 +92,7 @@ async function getAnthropicApiKey(authStorage: AuthStorage): Promise<string> {
 	return key;
 }
 
+/** 支持的图片文件扩展名到 MIME 类型的映射 */
 const IMAGE_MIME_TYPES: Record<string, string> = {
 	jpg: "image/jpeg",
 	jpeg: "image/jpeg",
@@ -62,14 +101,25 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
 	webp: "image/webp",
 };
 
+/**
+ * 根据文件名获取图片 MIME 类型
+ * @param filename - 文件名
+ * @returns MIME 类型字符串，非图片返回 undefined
+ */
 function getImageMimeType(filename: string): string | undefined {
 	return IMAGE_MIME_TYPES[filename.toLowerCase().split(".").pop() || ""];
 }
 
+/**
+ * 读取工作记忆（MEMORY.md）
+ * 包含工作区级别的全局记忆和频道级别的专属记忆
+ * @param channelDir - 频道目录路径
+ * @returns 格式化后的记忆内容字符串
+ */
 function getMemory(channelDir: string): string {
 	const parts: string[] = [];
 
-	// Read workspace-level memory (shared across all channels)
+	// 读取工作区级别的全局记忆（所有频道共享）
 	const workspaceMemoryPath = join(channelDir, "..", "MEMORY.md");
 	if (existsSync(workspaceMemoryPath)) {
 		try {
@@ -82,7 +132,7 @@ function getMemory(channelDir: string): string {
 		}
 	}
 
-	// Read channel-specific memory
+	// 读取频道专属记忆
 	const channelMemoryPath = join(channelDir, "MEMORY.md");
 	if (existsSync(channelMemoryPath)) {
 		try {
@@ -102,15 +152,23 @@ function getMemory(channelDir: string): string {
 	return parts.join("\n\n");
 }
 
+/**
+ * 加载 mom 的技能（Skills）
+ * 先加载工作区级别的全局技能，再加载频道级别的技能（同名会覆盖全局技能）
+ *
+ * @param channelDir - 频道目录路径（宿主机路径）
+ * @param workspacePath - 工作区路径（可能是容器内路径如 /workspace）
+ * @returns 合并后的技能列表
+ */
 function loadMomSkills(channelDir: string, workspacePath: string): Skill[] {
 	const skillMap = new Map<string, Skill>();
 
-	// channelDir is the host path (e.g., /Users/.../data/C0A34FL8PMH)
-	// hostWorkspacePath is the parent directory on host
-	// workspacePath is the container path (e.g., /workspace)
+	// channelDir 是宿主机路径（如 /Users/.../data/C0A34FL8PMH）
+	// hostWorkspacePath 是宿主机上的父目录
+	// workspacePath 是容器内路径（如 /workspace）
 	const hostWorkspacePath = join(channelDir, "..");
 
-	// Helper to translate host paths to container paths
+	// 将宿主机路径转换为容器内路径的辅助函数
 	const translatePath = (hostPath: string): string => {
 		if (hostPath.startsWith(hostWorkspacePath)) {
 			return workspacePath + hostPath.slice(hostWorkspacePath.length);
@@ -118,16 +176,16 @@ function loadMomSkills(channelDir: string, workspacePath: string): Skill[] {
 		return hostPath;
 	};
 
-	// Load workspace-level skills (global)
+	// 加载工作区级别的全局技能
 	const workspaceSkillsDir = join(hostWorkspacePath, "skills");
 	for (const skill of loadSkillsFromDir({ dir: workspaceSkillsDir, source: "workspace" }).skills) {
-		// Translate paths to container paths for system prompt
+		// 将路径转换为容器内路径，用于系统提示词
 		skill.filePath = translatePath(skill.filePath);
 		skill.baseDir = translatePath(skill.baseDir);
 		skillMap.set(skill.name, skill);
 	}
 
-	// Load channel-specific skills (override workspace skills on collision)
+	// 加载频道级别的技能（同名技能会覆盖全局技能）
 	const channelSkillsDir = join(channelDir, "skills");
 	for (const skill of loadSkillsFromDir({ dir: channelSkillsDir, source: "channel" }).skills) {
 		skill.filePath = translatePath(skill.filePath);
@@ -138,6 +196,19 @@ function loadMomSkills(channelDir: string, workspacePath: string): Skill[] {
 	return Array.from(skillMap.values());
 }
 
+/**
+ * 构建 LLM 系统提示词
+ * 包含机器人身份、Slack 格式说明、环境信息、工作区布局、技能、事件系统、记忆等
+ *
+ * @param workspacePath - 工作区路径
+ * @param channelId - 频道 ID
+ * @param memory - 当前记忆内容
+ * @param sandboxConfig - 沙盒配置
+ * @param channels - Slack 频道列表
+ * @param users - Slack 用户列表
+ * @param skills - 可用技能列表
+ * @returns 完整的系统提示词字符串
+ */
 function buildSystemPrompt(
 	workspacePath: string,
 	channelId: string,
@@ -150,14 +221,15 @@ function buildSystemPrompt(
 	const channelPath = `${workspacePath}/${channelId}`;
 	const isDocker = sandboxConfig.type === "docker";
 
-	// Format channel mappings
+	// 格式化频道 ID 到名称的映射表
 	const channelMappings =
 		channels.length > 0 ? channels.map((c) => `${c.id}\t#${c.name}`).join("\n") : "(no channels loaded)";
 
-	// Format user mappings
+	// 格式化用户 ID 到名称的映射表
 	const userMappings =
 		users.length > 0 ? users.map((u) => `${u.id}\t@${u.userName}\t${u.displayName}`).join("\n") : "(no users loaded)";
 
+	// 根据沙盒类型生成环境描述
 	const envDescription = isDocker
 		? `You are running inside a Docker container (Alpine Linux).
 - Bash working directory: / (use cd or absolute paths)
@@ -328,16 +400,29 @@ Each tool requires a "label" parameter (shown to user).
 `;
 }
 
+/**
+ * 截断文本到指定最大长度
+ * @param text - 原始文本
+ * @param maxLen - 最大长度
+ * @returns 截断后的文本（超长时末尾添加 "..."）
+ */
 function truncate(text: string, maxLen: number): string {
 	if (text.length <= maxLen) return text;
 	return `${text.substring(0, maxLen - 3)}...`;
 }
 
+/**
+ * 从工具执行结果中提取纯文本
+ * 支持字符串类型和 { content: [{type, text}] } 结构
+ * @param result - 工具执行返回的结果
+ * @returns 提取出的文本字符串
+ */
 function extractToolResultText(result: unknown): string {
 	if (typeof result === "string") {
 		return result;
 	}
 
+	// 处理 { content: [{type: "text", text: "..."}] } 格式
 	if (
 		result &&
 		typeof result === "object" &&
@@ -359,12 +444,21 @@ function extractToolResultText(result: unknown): string {
 	return JSON.stringify(result);
 }
 
+/**
+ * 格式化工具调用参数，用于 Slack 线程中展示
+ * 跳过 label 参数，对 path 参数特殊处理（包含 offset/limit 信息）
+ * @param _toolName - 工具名称（当前未使用）
+ * @param args - 工具调用参数
+ * @returns 格式化后的参数字符串
+ */
 function formatToolArgsForSlack(_toolName: string, args: Record<string, unknown>): string {
 	const lines: string[] = [];
 
 	for (const [key, value] of Object.entries(args)) {
+		// 跳过 label 参数
 		if (key === "label") continue;
 
+		// 对 path 参数做特殊格式化，附带行范围信息
 		if (key === "path" && typeof value === "string") {
 			const offset = args.offset as number | undefined;
 			const limit = args.limit as number | undefined;
@@ -376,6 +470,7 @@ function formatToolArgsForSlack(_toolName: string, args: Record<string, unknown>
 			continue;
 		}
 
+		// 跳过 offset 和 limit（已在 path 中处理）
 		if (key === "offset" || key === "limit") continue;
 
 		if (typeof value === "string") {
@@ -388,12 +483,16 @@ function formatToolArgsForSlack(_toolName: string, args: Record<string, unknown>
 	return lines.join("\n");
 }
 
-// Cache runners per channel
+/** 按频道缓存的运行器实例 */
 const channelRunners = new Map<string, AgentRunner>();
 
 /**
- * Get or create an AgentRunner for a channel.
- * Runners are cached - one per channel, persistent across messages.
+ * 获取或创建频道的 AgentRunner
+ * 运行器会被缓存，每个频道一个实例，跨消息持久化
+ * @param sandboxConfig - 沙盒配置
+ * @param channelId - 频道 ID
+ * @param channelDir - 频道目录路径
+ * @returns AgentRunner 实例
  */
 export function getOrCreateRunner(sandboxConfig: SandboxConfig, channelId: string, channelDir: string): AgentRunner {
 	const existing = channelRunners.get(channelId);
@@ -405,33 +504,38 @@ export function getOrCreateRunner(sandboxConfig: SandboxConfig, channelId: strin
 }
 
 /**
- * Create a new AgentRunner for a channel.
- * Sets up the session and subscribes to events once.
+ * 创建新的 AgentRunner
+ * 初始化 Agent、Session、工具集，并订阅 Agent 事件（工具执行、消息流、压缩、重试等）
+ *
+ * @param sandboxConfig - 沙盒配置
+ * @param channelId - 频道 ID
+ * @param channelDir - 频道目录路径
+ * @returns 新创建的 AgentRunner 实例
  */
 function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDir: string): AgentRunner {
 	const executor = createExecutor(sandboxConfig);
 	const workspacePath = executor.getWorkspacePath(channelDir.replace(`/${channelId}`, ""));
 
-	// Create tools
+	// 创建工具集
 	const tools = createMomTools(executor);
 
-	// Initial system prompt (will be updated each run with fresh memory/channels/users/skills)
+	// 构建初始系统提示词（每次运行时会用最新的记忆/频道/用户/技能信息更新）
 	const memory = getMemory(channelDir);
 	const skills = loadMomSkills(channelDir, workspacePath);
 	const systemPrompt = buildSystemPrompt(workspacePath, channelId, memory, sandboxConfig, [], [], skills);
 
-	// Create session manager and settings manager
-	// Use a fixed context.jsonl file per channel (not timestamped like coding-agent)
+	// 创建会话管理器和设置管理器
+	// 每个频道使用固定的 context.jsonl 文件（不像 coding-agent 那样带时间戳）
 	const contextFile = join(channelDir, "context.jsonl");
 	const sessionManager = SessionManager.open(contextFile, channelDir);
 	const settingsManager = new MomSettingsManager(join(channelDir, ".."));
 
-	// Create AuthStorage and ModelRegistry
-	// Auth stored outside workspace so agent can't access it
+	// 创建认证存储和模型注册表
+	// 认证信息存储在工作区外部，防止 Agent 访问
 	const authStorage = AuthStorage.create(join(homedir(), ".pi", "mom", "auth.json"));
 	const modelRegistry = new ModelRegistry(authStorage);
 
-	// Create agent
+	// 创建 Agent 实例
 	const agent = new Agent({
 		initialState: {
 			systemPrompt,
@@ -443,13 +547,14 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		getApiKey: async () => getAnthropicApiKey(authStorage),
 	});
 
-	// Load existing messages
+	// 加载已有的上下文消息
 	const loadedSession = sessionManager.buildSessionContext();
 	if (loadedSession.messages.length > 0) {
 		agent.replaceMessages(loadedSession.messages);
 		log.logInfo(`[${channelId}] Loaded ${loadedSession.messages.length} messages from context.jsonl`);
 	}
 
+	/** 资源加载器（为 AgentSession 提供扩展、技能等资源的空实现） */
 	const resourceLoader: ResourceLoader = {
 		getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
 		getSkills: () => ({ skills: [], diagnostics: [] }),
@@ -463,9 +568,10 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		reload: async () => {},
 	};
 
+	// 将工具列表转换为名称到工具的映射，用于覆盖默认工具
 	const baseToolsOverride = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
 
-	// Create AgentSession wrapper
+	// 创建 AgentSession 包装器
 	const session = new AgentSession({
 		agent,
 		sessionManager,
@@ -476,15 +582,20 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		baseToolsOverride,
 	});
 
-	// Mutable per-run state - event handler references this
+	// 可变的运行时状态 - 事件处理器通过引用访问此对象
 	const runState = {
+		/** 当前运行的 Slack 上下文 */
 		ctx: null as SlackContext | null,
+		/** 当前运行的日志上下文 */
 		logCtx: null as { channelId: string; userName?: string; channelName?: string } | null,
+		/** 消息发送队列 */
 		queue: null as {
 			enqueue(fn: () => Promise<void>, errorContext: string): void;
 			enqueueMessage(text: string, target: "main" | "thread", errorContext: string, doLog?: boolean): void;
 		} | null,
+		/** 正在执行中的工具调用（按 toolCallId 索引） */
 		pendingTools: new Map<string, { toolName: string; args: unknown; startTime: number }>(),
+		/** 累计的 Token 用量统计 */
 		totalUsage: {
 			input: 0,
 			output: 0,
@@ -492,18 +603,21 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			cacheWrite: 0,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
+		/** 运行停止原因 */
 		stopReason: "stop",
+		/** 错误消息（如果有） */
 		errorMessage: undefined as string | undefined,
 	};
 
-	// Subscribe to events ONCE
+	// 订阅 Agent 事件（只订阅一次，所有运行共享）
 	session.subscribe(async (event) => {
-		// Skip if no active run
+		// 如果没有活跃的运行，跳过事件处理
 		if (!runState.ctx || !runState.logCtx || !runState.queue) return;
 
 		const { ctx, logCtx, queue, pendingTools } = runState;
 
 		if (event.type === "tool_execution_start") {
+			// 工具开始执行：记录日志并在主消息中显示标签
 			const agentEvent = event as AgentEvent & { type: "tool_execution_start" };
 			const args = agentEvent.args as { label?: string };
 			const label = args.label || agentEvent.toolName;
@@ -517,6 +631,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			log.logToolStart(logCtx, agentEvent.toolName, label, agentEvent.args as Record<string, unknown>);
 			queue.enqueue(() => ctx.respond(`_→ ${label}_`, false), "tool label");
 		} else if (event.type === "tool_execution_end") {
+			// 工具执行完成：记录结果，在线程中发送详细信息
 			const agentEvent = event as AgentEvent & { type: "tool_execution_end" };
 			const resultStr = extractToolResultText(agentEvent.result);
 			const pending = pendingTools.get(agentEvent.toolCallId);
@@ -530,7 +645,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				log.logToolSuccess(logCtx, agentEvent.toolName, durationMs, resultStr);
 			}
 
-			// Post args + result to thread
+			// 在线程中发送工具参数和执行结果
 			const label = pending?.args ? (pending.args as { label?: string }).label : undefined;
 			const argsFormatted = pending
 				? formatToolArgsForSlack(agentEvent.toolName, pending.args as Record<string, unknown>)
@@ -544,19 +659,23 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 			queue.enqueueMessage(threadMessage, "thread", "tool result thread", false);
 
+			// 工具执行出错时在主消息中显示简要错误
 			if (agentEvent.isError) {
 				queue.enqueue(() => ctx.respond(`_Error: ${truncate(resultStr, 200)}_`, false), "tool error");
 			}
 		} else if (event.type === "message_start") {
+			// 助手消息开始生成
 			const agentEvent = event as AgentEvent & { type: "message_start" };
 			if (agentEvent.message.role === "assistant") {
 				log.logResponseStart(logCtx);
 			}
 		} else if (event.type === "message_end") {
+			// 助手消息生成完成：提取文本和思考内容，发送到 Slack
 			const agentEvent = event as AgentEvent & { type: "message_end" };
 			if (agentEvent.message.role === "assistant") {
 				const assistantMsg = agentEvent.message as any;
 
+				// 记录停止原因和错误消息
 				if (assistantMsg.stopReason) {
 					runState.stopReason = assistantMsg.stopReason;
 				}
@@ -564,6 +683,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 					runState.errorMessage = assistantMsg.errorMessage;
 				}
 
+				// 累加 Token 用量
 				if (assistantMsg.usage) {
 					runState.totalUsage.input += assistantMsg.usage.input;
 					runState.totalUsage.output += assistantMsg.usage.output;
@@ -576,6 +696,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 					runState.totalUsage.cost.total += assistantMsg.usage.cost.total;
 				}
 
+				// 分离思考内容和文本内容
 				const content = agentEvent.message.content;
 				const thinkingParts: string[] = [];
 				const textParts: string[] = [];
@@ -589,12 +710,14 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 
 				const text = textParts.join("\n");
 
+				// 发送思考内容（以斜体显示）
 				for (const thinking of thinkingParts) {
 					log.logThinking(logCtx, thinking);
 					queue.enqueueMessage(`_${thinking}_`, "main", "thinking main");
 					queue.enqueueMessage(`_${thinking}_`, "thread", "thinking thread", false);
 				}
 
+				// 发送文本响应
 				if (text.trim()) {
 					log.logResponse(logCtx, text);
 					queue.enqueueMessage(text, "main", "response main");
@@ -602,9 +725,11 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				}
 			}
 		} else if (event.type === "auto_compaction_start") {
+			// 自动上下文压缩开始
 			log.logInfo(`Auto-compaction started (reason: ${(event as any).reason})`);
 			queue.enqueue(() => ctx.respond("_Compacting context..._", false), "compaction start");
 		} else if (event.type === "auto_compaction_end") {
+			// 自动上下文压缩完成
 			const compEvent = event as any;
 			if (compEvent.result) {
 				log.logInfo(`Auto-compaction complete: ${compEvent.result.tokensBefore} tokens compacted`);
@@ -612,6 +737,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				log.logInfo("Auto-compaction aborted");
 			}
 		} else if (event.type === "auto_retry_start") {
+			// API 调用自动重试
 			const retryEvent = event as any;
 			log.logWarning(`Retrying (${retryEvent.attempt}/${retryEvent.maxAttempts})`, retryEvent.errorMessage);
 			queue.enqueue(
@@ -621,8 +747,14 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 		}
 	});
 
-	// Slack message limit
+	/** Slack 消息长度上限 */
 	const SLACK_MAX_LENGTH = 40000;
+
+	/**
+	 * 将超长文本拆分为多条 Slack 消息
+	 * @param text - 原始文本
+	 * @returns 拆分后的文本数组
+	 */
 	const splitForSlack = (text: string): string[] => {
 		if (text.length <= SLACK_MAX_LENGTH) return [text];
 		const parts: string[] = [];
@@ -644,25 +776,25 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			_store: ChannelStore,
 			_pendingMessages?: PendingMessage[],
 		): Promise<{ stopReason: string; errorMessage?: string }> {
-			// Ensure channel directory exists
+			// 确保频道目录存在
 			await mkdir(channelDir, { recursive: true });
 
-			// Sync messages from log.jsonl that arrived while we were offline or busy
-			// Exclude the current message (it will be added via prompt())
+			// 同步 log.jsonl 中在离线或忙碌期间到达的消息
+			// 排除当前消息（它将通过 prompt() 添加）
 			const syncedCount = syncLogToSessionManager(sessionManager, channelDir, ctx.message.ts);
 			if (syncedCount > 0) {
 				log.logInfo(`[${channelId}] Synced ${syncedCount} messages from log.jsonl`);
 			}
 
-			// Reload messages from context.jsonl
-			// This picks up any messages synced above
+			// 从 context.jsonl 重新加载消息
+			// 这会包含上面同步的消息
 			const reloadedSession = sessionManager.buildSessionContext();
 			if (reloadedSession.messages.length > 0) {
 				agent.replaceMessages(reloadedSession.messages);
 				log.logInfo(`[${channelId}] Reloaded ${reloadedSession.messages.length} messages from context`);
 			}
 
-			// Update system prompt with fresh memory, channel/user info, and skills
+			// 用最新的记忆、频道/用户信息和技能更新系统提示词
 			const memory = getMemory(channelDir);
 			const skills = loadMomSkills(channelDir, workspacePath);
 			const systemPrompt = buildSystemPrompt(
@@ -676,13 +808,13 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			);
 			session.agent.setSystemPrompt(systemPrompt);
 
-			// Set up file upload function
+			// 设置文件上传函数（将容器路径转换回宿主机路径）
 			setUploadFunction(async (filePath: string, title?: string) => {
 				const hostPath = translateToHostPath(filePath, channelDir, workspacePath, channelId);
 				await ctx.uploadFile(hostPath, title);
 			});
 
-			// Reset per-run state
+			// 重置运行时状态
 			runState.ctx = ctx;
 			runState.logCtx = {
 				channelId: ctx.message.channel,
@@ -700,7 +832,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			runState.stopReason = "stop";
 			runState.errorMessage = undefined;
 
-			// Create queue for this run
+			// 创建本次运行的消息发送队列（保证顺序执行）
 			let queueChain = Promise.resolve();
 			runState.queue = {
 				enqueue(fn: () => Promise<void>, errorContext: string): void {
@@ -713,12 +845,13 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 							try {
 								await ctx.respondInThread(`_Error: ${errMsg}_`);
 							} catch {
-								// Ignore
+								// 忽略错误
 							}
 						}
 					});
 				},
 				enqueueMessage(text: string, target: "main" | "thread", errorContext: string, doLog = true): void {
+					// 超长消息拆分后逐条发送
 					const parts = splitForSlack(text);
 					for (const part of parts) {
 						this.enqueue(
@@ -729,12 +862,12 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				},
 			};
 
-			// Log context info
+			// 记录上下文信息
 			log.logInfo(`Context sizes - system: ${systemPrompt.length} chars, memory: ${memory.length} chars`);
 			log.logInfo(`Channels: ${ctx.channels.length}, Users: ${ctx.users.length}`);
 
-			// Build user message with timestamp and username prefix
-			// Format: "[YYYY-MM-DD HH:MM:SS+HH:MM] [username]: message" so LLM knows when and who
+			// 构建用户消息，添加时间戳和用户名前缀
+			// 格式: "[YYYY-MM-DD HH:MM:SS+HH:MM] [username]: message"
 			const now = new Date();
 			const pad = (n: number) => n.toString().padStart(2, "0");
 			const offset = -now.getTimezoneOffset();
@@ -744,6 +877,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${offsetSign}${offsetHours}:${offsetMins}`;
 			let userMessage = `[${timestamp}] [${ctx.message.userName || "unknown"}]: ${ctx.message.text}`;
 
+			// 分离图片附件和非图片附件
 			const imageAttachments: ImageContent[] = [];
 			const nonImagePaths: string[] = [];
 
@@ -752,6 +886,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				const mimeType = getImageMimeType(a.local);
 
 				if (mimeType && existsSync(fullPath)) {
+					// 图片附件：读取为 base64 编码，直接传给 LLM
 					try {
 						imageAttachments.push({
 							type: "image",
@@ -762,15 +897,17 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						nonImagePaths.push(fullPath);
 					}
 				} else {
+					// 非图片附件：在消息中添加文件路径引用
 					nonImagePaths.push(fullPath);
 				}
 			}
 
+			// 将非图片附件路径添加到消息中
 			if (nonImagePaths.length > 0) {
 				userMessage += `\n\n<slack_attachments>\n${nonImagePaths.join("\n")}\n</slack_attachments>`;
 			}
 
-			// Debug: write context to last_prompt.jsonl
+			// 调试：将完整上下文写入 last_prompt.jsonl
 			const debugContext = {
 				systemPrompt,
 				messages: session.messages,
@@ -779,12 +916,13 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			};
 			await writeFile(join(channelDir, "last_prompt.jsonl"), JSON.stringify(debugContext, null, 2));
 
+			// 发送消息给 Agent 并等待处理完成
 			await session.prompt(userMessage, imageAttachments.length > 0 ? { images: imageAttachments } : undefined);
 
-			// Wait for queued messages
+			// 等待所有排队的 Slack 消息发送完成
 			await queueChain;
 
-			// Handle error case - update main message and post error to thread
+			// 处理错误情况 - 更新主消息并在线程中发送错误详情
 			if (runState.stopReason === "error" && runState.errorMessage) {
 				try {
 					await ctx.replaceMessage("_Sorry, something went wrong_");
@@ -794,7 +932,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 					log.logWarning("Failed to post error message", errMsg);
 				}
 			} else {
-				// Final message update
+				// 正常完成 - 用最终文本替换主消息
 				const messages = session.messages;
 				const lastAssistant = messages.filter((m) => m.role === "assistant").pop();
 				const finalText =
@@ -803,7 +941,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						.map((c) => c.text)
 						.join("\n") || "";
 
-				// Check for [SILENT] marker - delete message and thread instead of posting
+				// 检查 [SILENT] 标记 - 删除消息和线程而不是发布
 				if (finalText.trim() === "[SILENT]" || finalText.trim().startsWith("[SILENT]")) {
 					try {
 						await ctx.deleteMessage();
@@ -813,6 +951,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 						log.logWarning("Failed to delete message for silent response", errMsg);
 					}
 				} else if (finalText.trim()) {
+					// 正常响应 - 更新主消息为最终文本
 					try {
 						const mainText =
 							finalText.length > SLACK_MAX_LENGTH
@@ -826,9 +965,9 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				}
 			}
 
-			// Log usage summary with context info
+			// 在线程中记录用量摘要
 			if (runState.totalUsage.cost.total > 0) {
-				// Get last non-aborted assistant message for context calculation
+				// 获取最后一条非中止的助手消息用于计算上下文大小
 				const messages = session.messages;
 				const lastAssistantMessage = messages
 					.slice()
@@ -848,7 +987,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 				await queueChain;
 			}
 
-			// Clear run state
+			// 清除运行时状态
 			runState.ctx = null;
 			runState.logCtx = null;
 			runState.queue = null;
@@ -856,6 +995,7 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 			return { stopReason: runState.stopReason, errorMessage: runState.errorMessage };
 		},
 
+		/** 中止当前运行的 Agent */
 		abort(): void {
 			session.abort();
 		},
@@ -863,7 +1003,14 @@ function createRunner(sandboxConfig: SandboxConfig, channelId: string, channelDi
 }
 
 /**
- * Translate container path back to host path for file operations
+ * 将容器内路径转换回宿主机路径，用于文件操作
+ * 当运行在 Docker 模式下时，Agent 看到的是 /workspace 路径，需要转换为实际的宿主机路径
+ *
+ * @param containerPath - 容器内文件路径
+ * @param channelDir - 频道目录的宿主机路径
+ * @param workspacePath - 工作区路径（Docker 下为 /workspace）
+ * @param channelId - 频道 ID
+ * @returns 宿主机上的实际文件路径
  */
 function translateToHostPath(
 	containerPath: string,
@@ -872,10 +1019,12 @@ function translateToHostPath(
 	channelId: string,
 ): string {
 	if (workspacePath === "/workspace") {
+		// Docker 模式：将 /workspace/<channelId>/... 转换为宿主机路径
 		const prefix = `/workspace/${channelId}/`;
 		if (containerPath.startsWith(prefix)) {
 			return join(channelDir, containerPath.slice(prefix.length));
 		}
+		// 将 /workspace/... 转换为宿主机的工作区根目录路径
 		if (containerPath.startsWith("/workspace/")) {
 			return join(channelDir, "..", containerPath.slice("/workspace/".length));
 		}

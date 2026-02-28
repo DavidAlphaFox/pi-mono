@@ -1,5 +1,11 @@
 /**
- * CLI argument parsing and help display
+ * CLI 参数解析与帮助信息显示模块
+ *
+ * 职责：
+ * - 定义所有 CLI 参数的类型结构（Args 接口）
+ * - 实现两阶段参数解析（第一阶段获取基础参数，第二阶段支持扩展标志）
+ * - 生成并打印详细的帮助信息
+ * - 验证思考级别等参数值
  */
 
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -7,8 +13,10 @@ import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR } from "../config.js";
 import { allTools, type ToolName } from "../core/tools/index.js";
 
+/** 输出模式类型 */
 export type Mode = "text" | "json" | "rpc";
 
+/** CLI 参数解析结果接口 */
 export interface Args {
 	provider?: string;
 	model?: string;
@@ -48,10 +56,16 @@ export interface Args {
 
 const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
+/** 验证给定字符串是否为有效的思考级别 */
 export function isValidThinkingLevel(level: string): level is ThinkingLevel {
 	return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
 }
 
+/**
+ * 解析命令行参数数组。
+ * 支持两阶段解析：第一次不传 extensionFlags，第二次传入扩展注册的标志。
+ * 未知标志在第一阶段被静默忽略，第二阶段通过 extensionFlags 处理。
+ */
 export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "boolean" | "string" }>): Args {
 	const result: Args = {
 		messages: [],
@@ -176,6 +190,7 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 	return result;
 }
 
+/** 打印完整的 CLI 帮助信息，包括命令、选项、示例和环境变量 */
 export function printHelp(): void {
 	console.log(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
 

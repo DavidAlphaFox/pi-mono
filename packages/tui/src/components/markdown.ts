@@ -1,65 +1,110 @@
+/**
+ * @file Markdown 渲染组件
+ *
+ * 将 Markdown 文本解析并渲染为带 ANSI 样式的终端输出。
+ * 支持的 Markdown 元素：
+ * - 标题（h1-h6，带不同样式）
+ * - 段落、粗体、斜体、删除线
+ * - 代码块（支持语法高亮回调）和行内代码
+ * - 链接（带 URL 显示）
+ * - 有序/无序列表（支持嵌套）
+ * - 引用块（带竖线边框）
+ * - 水平分隔线
+ * - 表格（自适应列宽，支持自动换行）
+ *
+ * 渲染结果会被缓存以避免重复解析。
+ */
+
 import { marked, type Token } from "marked";
 import { isImageLine } from "../terminal-image.js";
 import type { Component } from "../tui.js";
 import { applyBackgroundToLine, visibleWidth, wrapTextWithAnsi } from "../utils.js";
 
 /**
- * Default text styling for markdown content.
- * Applied to all text unless overridden by markdown formatting.
+ * Markdown 内容的默认文本样式。
+ * 应用于所有文本，除非被 Markdown 格式覆盖。
  */
 export interface DefaultTextStyle {
-	/** Foreground color function */
+	/** 前景色函数 */
 	color?: (text: string) => string;
-	/** Background color function */
+	/** 背景色函数 */
 	bgColor?: (text: string) => string;
-	/** Bold text */
+	/** 粗体 */
 	bold?: boolean;
-	/** Italic text */
+	/** 斜体 */
 	italic?: boolean;
-	/** Strikethrough text */
+	/** 删除线 */
 	strikethrough?: boolean;
-	/** Underline text */
+	/** 下划线 */
 	underline?: boolean;
 }
 
 /**
- * Theme functions for markdown elements.
- * Each function takes text and returns styled text with ANSI codes.
+ * Markdown 元素的主题函数。
+ * 每个函数接收文本并返回带 ANSI 代码的样式化文本。
  */
 export interface MarkdownTheme {
+	/** 标题样式 */
 	heading: (text: string) => string;
+	/** 链接文本样式 */
 	link: (text: string) => string;
+	/** 链接 URL 样式 */
 	linkUrl: (text: string) => string;
+	/** 行内代码样式 */
 	code: (text: string) => string;
+	/** 代码块内容样式 */
 	codeBlock: (text: string) => string;
+	/** 代码块边界标记样式 */
 	codeBlockBorder: (text: string) => string;
+	/** 引用文本样式 */
 	quote: (text: string) => string;
+	/** 引用边框样式 */
 	quoteBorder: (text: string) => string;
+	/** 水平分隔线样式 */
 	hr: (text: string) => string;
+	/** 列表项标记样式 */
 	listBullet: (text: string) => string;
+	/** 粗体样式 */
 	bold: (text: string) => string;
+	/** 斜体样式 */
 	italic: (text: string) => string;
+	/** 删除线样式 */
 	strikethrough: (text: string) => string;
+	/** 下划线样式 */
 	underline: (text: string) => string;
+	/** 代码语法高亮函数（可选） */
 	highlightCode?: (code: string, lang?: string) => string[];
-	/** Prefix applied to each rendered code block line (default: "  ") */
+	/** 代码块每行的缩进前缀（默认 "  "） */
 	codeBlockIndent?: string;
 }
 
+/** 行内样式上下文（用于在嵌套元素间传递样式） */
 interface InlineStyleContext {
+	/** 文本样式应用函数 */
 	applyText: (text: string) => string;
+	/** 样式前缀（ANSI 代码，用于样式恢复） */
 	stylePrefix: string;
 }
 
+/**
+ * Markdown 渲染组件。
+ * 解析 Markdown 文本并渲染为带 ANSI 样式的终端输出行。
+ */
 export class Markdown implements Component {
+	/** Markdown 源文本 */
 	private text: string;
-	private paddingX: number; // Left/right padding
-	private paddingY: number; // Top/bottom padding
+	/** 左右内边距 */
+	private paddingX: number;
+	/** 上下内边距 */
+	private paddingY: number;
+	/** 默认文本样式 */
 	private defaultTextStyle?: DefaultTextStyle;
+	/** 主题配置 */
 	private theme: MarkdownTheme;
+	/** 默认样式前缀缓存 */
 	private defaultStylePrefix?: string;
 
-	// Cache for rendered output
+	// 渲染输出缓存
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
@@ -78,6 +123,7 @@ export class Markdown implements Component {
 		this.defaultTextStyle = defaultTextStyle;
 	}
 
+	/** 设置 Markdown 文本内容 */
 	setText(text: string): void {
 		this.text = text;
 		this.invalidate();
@@ -178,10 +224,10 @@ export class Markdown implements Component {
 	}
 
 	/**
-	 * Apply default text style to a string.
-	 * This is the base styling applied to all text content.
-	 * NOTE: Background color is NOT applied here - it's applied at the padding stage
-	 * to ensure it extends to the full line width.
+	 * 将默认文本样式应用到字符串。
+	 * 这是应用于所有文本内容的基础样式。
+	 * 注意：背景色不在此处应用 - 而是在填充阶段应用，
+	 * 以确保背景色扩展到整行宽度。
 	 */
 	private applyDefaultStyle(text: string): string {
 		if (!this.defaultTextStyle) {
@@ -212,6 +258,7 @@ export class Markdown implements Component {
 		return styled;
 	}
 
+	/** 获取默认样式的 ANSI 前缀（缓存） */
 	private getDefaultStylePrefix(): string {
 		if (!this.defaultTextStyle) {
 			return "";
@@ -246,6 +293,7 @@ export class Markdown implements Component {
 		return this.defaultStylePrefix;
 	}
 
+	/** 从样式函数中提取 ANSI 前缀 */
 	private getStylePrefix(styleFn: (text: string) => string): string {
 		const sentinel = "\u0000";
 		const styled = styleFn(sentinel);
@@ -253,6 +301,7 @@ export class Markdown implements Component {
 		return sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
 	}
 
+	/** 获取默认的行内样式上下文 */
 	private getDefaultInlineStyleContext(): InlineStyleContext {
 		return {
 			applyText: (text: string) => this.applyDefaultStyle(text),
@@ -260,6 +309,7 @@ export class Markdown implements Component {
 		};
 	}
 
+	/** 渲染单个 Markdown token 为终端输出行 */
 	private renderToken(token: Token, width: number, nextTokenType?: string): string[] {
 		const lines: string[] = [];
 
@@ -383,6 +433,7 @@ export class Markdown implements Component {
 		return lines;
 	}
 
+	/** 渲染行内 token 序列为样式化文本字符串 */
 	private renderInlineTokens(tokens: Token[], styleContext?: InlineStyleContext): string {
 		let result = "";
 		const resolvedStyleContext = styleContext ?? this.getDefaultInlineStyleContext();
@@ -470,9 +521,7 @@ export class Markdown implements Component {
 		return result;
 	}
 
-	/**
-	 * Render a list with proper nesting support
-	 */
+	/** 渲染列表（支持嵌套） */
 	private renderList(token: Token & { items: any[]; ordered: boolean; start?: number }, depth: number): string[] {
 		const lines: string[] = [];
 		const indent = "  ".repeat(depth);
@@ -522,8 +571,8 @@ export class Markdown implements Component {
 	}
 
 	/**
-	 * Render list item tokens, handling nested lists
-	 * Returns lines WITHOUT the parent indent (renderList will add it)
+	 * 渲染列表项的 token，处理嵌套列表。
+	 * 返回不含父级缩进的行（renderList 会添加缩进）。
 	 */
 	private renderListItem(tokens: Token[], parentDepth: number): string[] {
 		const lines: string[] = [];
@@ -571,9 +620,7 @@ export class Markdown implements Component {
 		return lines;
 	}
 
-	/**
-	 * Get the visible width of the longest word in a string.
-	 */
+	/** 获取字符串中最长单词的可见宽度 */
 	private getLongestWordWidth(text: string, maxWidth?: number): number {
 		const words = text.split(/\s+/).filter((word) => word.length > 0);
 		let longest = 0;
@@ -587,18 +634,16 @@ export class Markdown implements Component {
 	}
 
 	/**
-	 * Wrap a table cell to fit into a column.
-	 *
-	 * Delegates to wrapTextWithAnsi() so ANSI codes + long tokens are handled
-	 * consistently with the rest of the renderer.
+	 * 将表格单元格文本换行以适应列宽。
+	 * 委托给 wrapTextWithAnsi() 以一致处理 ANSI 代码和长文本。
 	 */
 	private wrapCellText(text: string, maxWidth: number): string[] {
 		return wrapTextWithAnsi(text, Math.max(1, maxWidth));
 	}
 
 	/**
-	 * Render a table with width-aware cell wrapping.
-	 * Cells that don't fit are wrapped to multiple lines.
+	 * 渲染表格（带宽度感知的单元格换行）。
+	 * 超出列宽的单元格会自动换行到多行。
 	 */
 	private renderTable(
 		token: Token & { header: any[]; rows: any[][]; raw?: string },

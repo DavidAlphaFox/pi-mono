@@ -1,3 +1,11 @@
+/**
+ * 扩展自定义消息组件。
+ *
+ * 该文件提供由扩展系统创建的自定义消息的渲染组件。
+ * 支持自定义渲染器（由扩展提供）和默认渲染两种模式。
+ * 使用独特的样式以区别于普通用户消息。
+ */
+
 import type { TextContent } from "@mariozechner/pi-ai";
 import type { Component } from "@mariozechner/pi-tui";
 import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@mariozechner/pi-tui";
@@ -6,8 +14,9 @@ import type { CustomMessage } from "../../../core/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 
 /**
- * Component that renders a custom message entry from extensions.
- * Uses distinct styling to differentiate from user messages.
+ * 自定义消息渲染组件。
+ * 优先使用扩展提供的自定义渲染器；如果渲染失败或未提供，
+ * 则使用默认的 Markdown 渲染方式，显示消息类型标签和内容。
  */
 export class CustomMessageComponent extends Container {
 	private message: CustomMessage<unknown>;

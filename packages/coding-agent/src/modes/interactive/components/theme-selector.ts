@@ -1,9 +1,17 @@
+/**
+ * 主题选择器组件。
+ *
+ * 该文件提供用于在可用主题之间切换的选择器组件，
+ * 支持实时预览功能：当光标移动到不同主题时自动应用预览。
+ */
+
 import { Container, type SelectItem, SelectList } from "@mariozechner/pi-tui";
 import { getAvailableThemes, getSelectListTheme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 
 /**
- * Component that renders a theme selector
+ * 主题选择器组件。
+ * 列出所有可用主题，标记当前主题，支持选中时回调和实时预览。
  */
 export class ThemeSelectorComponent extends Container {
 	private selectList: SelectList;

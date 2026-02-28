@@ -1,4 +1,12 @@
-// UI Components for extensions
+/**
+ * UI 组件桶导出文件。
+ *
+ * 该文件统一导出交互式模式下所有的 TUI 组件，
+ * 包括消息渲染、选择器、编辑器、加载动画、工具执行展示等组件，
+ * 供扩展系统和主模式程序使用。
+ */
+
+// UI 组件导出
 export { ArminComponent } from "./armin.js";
 export { AssistantMessageComponent } from "./assistant-message.js";
 export { BashExecutionComponent } from "./bash-execution.js";

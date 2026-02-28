@@ -1,13 +1,18 @@
+/**
+ * @file AttachmentsRuntimeProvider.ts
+ * @description 附件运行时提供者。
+ * 可选的提供者，当用户上传了附件时向沙箱代码提供文件访问 API。
+ * 附件数据为只读快照，无需消息通信。
+ */
+
 import { ATTACHMENTS_RUNTIME_DESCRIPTION } from "../../prompts/prompts.js";
 import type { Attachment } from "../../utils/attachment-utils.js";
 import type { SandboxRuntimeProvider } from "./SandboxRuntimeProvider.js";
 
 /**
- * Attachments Runtime Provider
- *
- * OPTIONAL provider that provides file access APIs to sandboxed code.
- * Only needed when attachments are present.
- * Attachments are read-only snapshot data - no messaging needed.
+ * 附件运行时提供者。
+ * 向沙箱代码暴露 listAttachments、readTextAttachment、readBinaryAttachment 函数，
+ * 数据直接从 window.attachments 中读取，无需异步消息通信。
  */
 export class AttachmentsRuntimeProvider implements SandboxRuntimeProvider {
 	constructor(private attachments: Attachment[]) {}

@@ -1,3 +1,10 @@
+/**
+ * @file MessageList.ts
+ * @description 消息列表组件（<message-list>）。
+ * 渲染稳定的（非流式）消息列表，使用 Lit 的 repeat 指令实现高效的 DOM 更新。
+ * 支持用户消息、助手消息、工具消息的分类渲染和自定义消息渲染器。
+ */
+
 import type { AgentMessage, AgentTool } from "@mariozechner/pi-agent-core";
 import type {
 	AssistantMessage as AssistantMessageType,
@@ -8,6 +15,11 @@ import { property } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { renderMessage } from "./message-renderer-registry.js";
 
+/**
+ * 消息列表 Web Component。
+ * 接收消息数组，按角色分类渲染为对应的消息组件，
+ * 跳过制品消息（artifact），优先使用自定义渲染器。
+ */
 export class MessageList extends LitElement {
 	@property({ type: Array }) messages: AgentMessage[] = [];
 	@property({ type: Array }) tools: AgentTool[] = [];
@@ -24,8 +36,12 @@ export class MessageList extends LitElement {
 		this.style.display = "block";
 	}
 
+	/**
+	 * 构建渲染项列表。
+	 * 将消息数组转换为带唯一键和模板的渲染项，用于 repeat 指令。
+	 */
 	private buildRenderItems() {
-		// Map tool results by call id for quick lookup
+		// 按工具调用 ID 建立工具结果索引，便于快速查找
 		const resultByCallId = new Map<string, ToolResultMessageType>();
 		for (const message of this.messages) {
 			if (message.role === "toolResult") {

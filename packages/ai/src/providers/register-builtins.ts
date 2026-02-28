@@ -1,3 +1,20 @@
+/**
+ * @file 内置 API 提供商注册
+ *
+ * 本文件负责将所有内置 API 提供商注册到全局注册表中，包括：
+ * - Anthropic Messages API（Claude 系列模型）
+ * - OpenAI Completions API（GPT 系列、兼容 API）
+ * - OpenAI Responses API（GPT-5 等新一代模型）
+ * - Azure OpenAI Responses API
+ * - OpenAI Codex Responses API（ChatGPT 订阅）
+ * - Google Generative AI（Gemini 系列）
+ * - Google Gemini CLI / Antigravity（Cloud Code Assist）
+ * - Google Vertex AI
+ * - Amazon Bedrock（Converse Stream API）
+ *
+ * 模块加载时自动执行注册。
+ */
+
 import { clearApiProviders, registerApiProvider } from "../api-registry.js";
 import { streamBedrock, streamSimpleBedrock } from "./amazon-bedrock.js";
 import { streamAnthropic, streamSimpleAnthropic } from "./anthropic.js";
@@ -9,6 +26,7 @@ import { streamOpenAICodexResponses, streamSimpleOpenAICodexResponses } from "./
 import { streamOpenAICompletions, streamSimpleOpenAICompletions } from "./openai-completions.js";
 import { streamOpenAIResponses, streamSimpleOpenAIResponses } from "./openai-responses.js";
 
+/** 注册所有内置 API 提供商到全局注册表 */
 export function registerBuiltInApiProviders(): void {
 	registerApiProvider({
 		api: "anthropic-messages",
@@ -65,6 +83,7 @@ export function registerBuiltInApiProviders(): void {
 	});
 }
 
+/** 重置 API 提供商注册表为内置默认状态 */
 export function resetApiProviders(): void {
 	clearApiProviders();
 	registerBuiltInApiProviders();
